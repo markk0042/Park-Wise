@@ -42,6 +42,7 @@ export const updateVehicle = async (id, payload) => {
 export const deleteVehicle = (id) => httpClient.delete(`/vehicles/${id}`);
 export const deleteAllVehicles = () => httpClient.delete('/vehicles');
 export const bulkInsertVehicles = (vehicles) => httpClient.post('/vehicles/bulk', { vehicles });
+export const updateAllParkingTypes = () => httpClient.post('/vehicles/update-parking-types');
 
 // Parking Logs
 export const fetchParkingLogs = async (limit) => {

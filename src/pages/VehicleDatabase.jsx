@@ -8,11 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Search, Edit, Trash2, CheckCircle, XCircle, Database, Tag } from "lucide-react";
+import { PlusCircle, Search, Edit, Trash2, CheckCircle, XCircle, Database, Tag, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
-import { createVehicle, deleteVehicle, fetchVehicles, updateVehicle } from "@/api";
+import { createVehicle, deleteVehicle, fetchVehicles, updateVehicle, updateAllParkingTypes } from "@/api";
 import { getParkingTypeFromPermit, autoAssignParkingType } from "@/utils/permitUtils";
 
 export default function VehicleDatabase() {
@@ -194,16 +194,31 @@ export default function VehicleDatabase() {
               Store permit numbers and registrations (GDPR compliant)
             </p>
           </div>
-          <Button
-            onClick={() => {
-              resetForm();
-              setShowForm(!showForm);
-            }}
-            className="bg-slate-900 hover:bg-slate-800 w-full sm:w-auto text-sm md:text-base"
-          >
-            <PlusCircle className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-            Add Vehicle
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button
+              onClick={() => {
+                resetForm();
+                setShowForm(!showForm);
+              }}
+              className="bg-slate-900 hover:bg-slate-800 w-full sm:w-auto text-sm md:text-base"
+            >
+              <PlusCircle className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+              Add Vehicle
+            </Button>
+            <Button
+              onClick={() => {
+                if (window.confirm("This will update all vehicles' parking types based on their permit numbers.\n\nPermits >= 00602 will be set to Yellow.\nPermits < 00602 will be set to Green.\n\nContinue?")) {
+                  updateParkingTypesMutation.mutate();
+                }
+              }}
+              disabled={updateParkingTypesMutation.isPending}
+              variant="outline"
+              className="w-full sm:w-auto text-sm md:text-base border-amber-300 text-amber-700 hover:bg-amber-50"
+            >
+              <RefreshCw className={`w-4 h-4 md:w-5 md:h-5 mr-2 ${updateParkingTypesMutation.isPending ? 'animate-spin' : ''}`} />
+              {updateParkingTypesMutation.isPending ? 'Updating...' : 'Update Permit Colors'}
+            </Button>
+          </div>
         </div>
 
         {successMessage && (

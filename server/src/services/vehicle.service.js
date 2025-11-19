@@ -63,3 +63,68 @@ export const bulkInsertVehicles = async (vehicles) => {
     if (error) throw error;
   }
 };
+
+/**
+ * Helper function to determine parking type from permit number
+ * Permits >= 602 are Yellow, otherwise Green
+ */
+const getParkingTypeFromPermit = (permitNumber) => {
+  if (!permitNumber) return 'Green';
+  const permitStr = String(permitNumber).trim();
+  if (!permitStr) return 'Green';
+  const permitNum = parseInt(permitStr, 10);
+  if (isNaN(permitNum)) return 'Green';
+  return permitNum >= 602 ? 'Yellow' : 'Green';
+};
+
+/**
+ * Update all vehicles' parking_type based on their permit numbers
+ * Permits >= 602 (00602) will be set to Yellow, others to Green
+ */
+export const updateParkingTypesFromPermits = async () => {
+  // Get all vehicles
+  const { data: vehicles, error: fetchError } = await supabaseAdmin
+    .from(VEHICLE_TABLE)
+    .select('id, permit_number, parking_type');
+  
+  if (fetchError) throw fetchError;
+  if (!vehicles || vehicles.length === 0) {
+    return { updated: 0, total: 0 };
+  }
+
+  let updatedCount = 0;
+  
+  // Process in batches to avoid overwhelming the database
+  const batchSize = 100;
+  for (let i = 0; i < vehicles.length; i += batchSize) {
+    const batch = vehicles.slice(i, i + batchSize);
+    
+    // Prepare updates for vehicles that need their parking_type changed
+    const updates = batch
+      .map(vehicle => {
+        const correctType = getParkingTypeFromPermit(vehicle.permit_number);
+        // Only update if the parking_type needs to change
+        if (vehicle.parking_type !== correctType) {
+          return {
+            id: vehicle.id,
+            parking_type: correctType
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Update vehicles in this batch
+    for (const update of updates) {
+      const { error } = await supabaseAdmin
+        .from(VEHICLE_TABLE)
+        .update({ parking_type: update.parking_type })
+        .eq('id', update.id);
+      
+      if (error) throw error;
+      updatedCount++;
+    }
+  }
+
+  return { updated: updatedCount, total: vehicles.length };
+};

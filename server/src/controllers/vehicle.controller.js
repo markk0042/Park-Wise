@@ -5,7 +5,8 @@ import {
   updateVehicle,
   deleteVehicle,
   deleteAllVehicles,
-  bulkInsertVehicles
+  bulkInsertVehicles,
+  updateParkingTypesFromPermits
 } from '../services/vehicle.service.js';
 
 const vehicleSchema = z.object({
@@ -69,6 +70,19 @@ export const bulkUploadVehicles = async (req, res, next) => {
     const vehicles = schema.parse(req.body?.vehicles);
     await bulkInsertVehicles(vehicles);
     res.status(201).json({ inserted: vehicles.length });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateAllParkingTypes = async (req, res, next) => {
+  try {
+    const result = await updateParkingTypesFromPermits();
+    res.json({ 
+      message: `Updated ${result.updated} of ${result.total} vehicles`,
+      updated: result.updated,
+      total: result.total
+    });
   } catch (err) {
     next(err);
   }
