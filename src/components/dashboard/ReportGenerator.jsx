@@ -3,8 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Download, Mail, Calendar, Loader2 } from "lucide-react";
+import { Download, Mail, Calendar, Loader2, Printer, FileText } from "lucide-react";
 import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ReportGenerator({ logs }) {
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -12,6 +18,8 @@ export default function ReportGenerator({ logs }) {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const filteredLogs = logs.filter(log => {
     const logDate = new Date(log.log_date);
@@ -115,6 +123,43 @@ export default function ReportGenerator({ logs }) {
     }, 2000);
   };
 
+  const handlePrint = async () => {
+    setGenerating(true);
+    // Small delay to ensure rendering is complete
+    setTimeout(() => {
+      setGenerating(false);
+      window.print();
+    }, 500);
+  };
+
+  // Prepare data for print preview
+  const preparePrintData = () => {
+    return sortedLogs.map(log => {
+      let permitNumber = "Not Assigned";
+      
+      if (log.notes?.includes("Permit:")) {
+        const match = log.notes.match(/Permit:\s*(.+?)(?:\s*-|$)/);
+        permitNumber = match ? match[1].trim() : log.notes.replace("Permit:", "").trim();
+      } else if (log.notes?.includes("No permit")) {
+        permitNumber = "No Permit";
+      } else if (log.parking_type === "Green" || log.parking_type === "Yellow") {
+        permitNumber = "Assigned (No # Stored)";
+      }
+      
+      const formattedDate = format(new Date(log.log_date), "dd/MM/yy");
+      
+      return {
+        registration: log.registration_plate,
+        permit: permitNumber,
+        date: formattedDate,
+        time: log.log_time || "",
+        parkingType: log.parking_type === "Green" ? "Green Car Park" : 
+                     log.parking_type === "Yellow" ? "Yellow Car Park" : 
+                     "Red (Unregistered)"
+      };
+    });
+  };
+
   return (
     <Card className="shadow-lg">
       <CardHeader className="px-4 sm:px-5 md:px-6">
@@ -160,14 +205,24 @@ export default function ReportGenerator({ logs }) {
         </div>
 
         <div className="space-y-3">
-          <Button
-            onClick={downloadCSV}
-            disabled={filteredLogs.length === 0}
-            className="w-full bg-slate-900 hover:bg-slate-800 h-10 sm:h-11 md:h-12 text-sm md:text-base"
-          >
-            <Download className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-            Download Formatted CSV Report
-          </Button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Button
+              onClick={downloadCSV}
+              disabled={filteredLogs.length === 0}
+              className="w-full bg-slate-900 hover:bg-slate-800 h-10 sm:h-11 md:h-12 text-sm md:text-base"
+            >
+              <Download className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+              Download CSV
+            </Button>
+            <Button
+              onClick={() => setShowPrintPreview(true)}
+              disabled={filteredLogs.length === 0}
+              className="w-full bg-blue-600 hover:bg-blue-700 h-10 sm:h-11 md:h-12 text-sm md:text-base"
+            >
+              <Printer className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+              Print / PDF
+            </Button>
+          </div>
 
           <div className="pt-3 md:pt-4 border-t">
             <Label htmlFor="email" className="text-sm md:text-base font-semibold mb-2 block">
@@ -213,6 +268,96 @@ export default function ReportGenerator({ logs }) {
           </div>
         )}
       </CardContent>
+
+      {/* Print Preview Dialog */}
+      <Dialog open={showPrintPreview} onOpenChange={setShowPrintPreview}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="print:hidden">
+            <DialogTitle className="text-xl md:text-2xl flex items-center gap-2">
+              <FileText className="w-6 h-6" />
+              Parking Log Report Preview
+            </DialogTitle>
+            <div className="flex gap-2 mt-4">
+              <Button 
+                onClick={handlePrint} 
+                className="bg-slate-900 hover:bg-slate-800"
+                disabled={generating}
+              >
+                <Printer className="w-4 h-4 mr-2" />
+                {generating ? 'Preparing...' : 'Print / Save as PDF'}
+              </Button>
+              <Button onClick={() => setShowPrintPreview(false)} variant="outline">
+                Close
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <style>{`
+            @media print {
+              body * {
+                visibility: hidden;
+              }
+              .print-content, .print-content * {
+                visibility: visible;
+              }
+              .print-content {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+              }
+              @page {
+                margin: 1.5cm;
+              }
+              .page-break {
+                page-break-after: always;
+              }
+            }
+          `}</style>
+
+          <div className="print-content mt-6">
+            {/* Report Header */}
+            <div className="mb-8 border-b-2 border-slate-900 pb-4">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2 text-center">
+                Car Park Report
+              </h1>
+              <div className="text-sm text-slate-600 text-center">
+                <p><strong>Report Period:</strong> {format(new Date(startDate), "dd/MM/yyyy")} to {format(new Date(endDate), "dd/MM/yyyy")}</p>
+                <p><strong>Generated:</strong> {format(new Date(), "PPP")} at {format(new Date(), "p")}</p>
+                <p><strong>Total Entries:</strong> {sortedLogs.length}</p>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border border-slate-300">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="border border-slate-300 px-4 py-3 text-left font-bold text-slate-900">Registrations</th>
+                    <th className="border border-slate-300 px-4 py-3 text-left font-bold text-slate-900">Permits</th>
+                    <th className="border border-slate-300 px-4 py-3 text-left font-bold text-slate-900">DD/MM/YY</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preparePrintData().map((row, index) => (
+                    <tr key={index} className="hover:bg-slate-50">
+                      <td className="border border-slate-300 px-4 py-2 font-mono font-semibold">{row.registration}</td>
+                      <td className="border border-slate-300 px-4 py-2">{row.permit}</td>
+                      <td className="border border-slate-300 px-4 py-2">{row.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Report Footer */}
+            <div className="mt-8 pt-4 border-t-2 border-slate-900 text-center text-sm text-slate-600">
+              <p>End of Report - {sortedLogs.length} entry(ies) included</p>
+              <p className="mt-1">Generated by ParkingLog Management System</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
