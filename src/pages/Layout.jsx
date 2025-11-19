@@ -54,22 +54,6 @@ function LayoutContent({ children, currentPageName }) {
     });
   }
 
-  if (user?.status === 'approved') {
-    navigationItems.push({
-      title: "Green Car Park",
-      url: createPageUrl("GreenCarPark"),
-      icon: ParkingSquare,
-    });
-  }
-
-  if (user?.status === 'approved') {
-    navigationItems.push({
-      title: "Yellow Car Park",
-      url: createPageUrl("YellowCarPark"),
-      icon: ParkingSquare,
-    });
-  }
-
   if (user?.role === 'admin' && user?.status === 'approved') {
     navigationItems.push({
       title: "Manage Complaints",
