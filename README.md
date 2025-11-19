@@ -352,6 +352,49 @@ See `server/README.md` for detailed API documentation.
 - Verify Node.js version compatibility
 - Check build logs for specific errors
 
+## 📱 Adding App to Home Screen
+
+You can add this app to your mobile device's home screen for quick access, making it feel like a native app.
+
+### iOS (iPhone/iPad) - Safari
+
+1. Open the app in Safari (not Chrome or other browsers)
+2. Tap the **Share** button (square with arrow pointing up) at the bottom
+3. Scroll down and tap **"Add to Home Screen"**
+4. Edit the name if desired (default: "Park Wise" or "ParkingLog")
+5. Tap **"Add"** in the top right
+6. The app icon will appear on your home screen
+
+### Android - Chrome
+
+1. Open the app in Chrome browser
+2. Tap the **Menu** button (three dots) in the top right
+3. Tap **"Add to Home screen"** or **"Install app"**
+4. Edit the name if desired
+5. Tap **"Add"** or **"Install"**
+6. The app icon will appear on your home screen
+
+### Android - Other Browsers
+
+1. Open the app in your browser
+2. Tap the **Menu** button (three dots or lines)
+3. Look for **"Add to Home screen"**, **"Install"**, or **"Add shortcut"**
+4. Follow the prompts to add the app
+
+### Desktop (Chrome/Edge)
+
+1. Open the app in Chrome or Edge
+2. Look for the **install icon** in the address bar (usually a "+" or download icon)
+3. Click it and select **"Install"**
+4. The app will open in its own window without browser controls
+
+### Benefits of Adding to Home Screen
+
+- **Quick Access**: Launch the app directly from your home screen
+- **Full Screen**: Opens without browser address bar (on mobile)
+- **App-like Experience**: Feels like a native app
+- **Offline Capability**: Some features may work offline (if configured)
+
 ## 📄 License
 
 This project is private and proprietary.
