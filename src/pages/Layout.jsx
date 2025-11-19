@@ -35,18 +35,19 @@ function LayoutContent({ children, currentPageName }) {
   }
 
   const navigationItems = [];
+  const isAdmin = user?.role === 'admin' && user?.status === 'approved';
+  const isApproved = user?.status === 'approved';
 
-  // Dashboard is first for everyone who is approved
-  if (user?.status === 'approved') {
+  // Standard users (non-admin) only see Dashboard and Non-Compliance Report
+  if (isApproved) {
+    // Dashboard - available to all approved users
     navigationItems.push({
       title: "Dashboard",
       url: createPageUrl("Dashboard"),
       icon: LayoutDashboard,
     });
-  }
 
-  // Non-Compliance Report for all approved users (both regular users and admins)
-  if (user?.status === 'approved') {
+    // Non-Compliance Report - available to all approved users
     navigationItems.push({
       title: "Non-Compliance Report",
       url: createPageUrl("NonComplianceReport"),
@@ -54,55 +55,44 @@ function LayoutContent({ children, currentPageName }) {
     });
   }
 
-  if (user?.role === 'admin' && user?.status === 'approved') {
+  // Admin-only navigation items
+  if (isAdmin) {
     navigationItems.push({
       title: "Manage Complaints",
       url: createPageUrl("ManageComplaints"),
       icon: FileText,
     });
-  }
 
-  if (user?.role === 'admin' && user?.status === 'approved') {
     navigationItems.push({
       title: "Vehicle Log Entry",
       url: createPageUrl("VehicleLogEntry"),
       icon: ClipboardList,
     });
-  }
 
-  if (user?.role === 'admin' && user?.status === 'approved') {
     navigationItems.push({
       title: "Vehicle Database",
       url: createPageUrl("VehicleDatabase"),
       icon: Database,
     });
-  }
 
-  if (user?.role === 'admin' && user?.status === 'approved') {
     navigationItems.push({
       title: "Bulk Upload",
       url: createPageUrl("BulkUpload"),
       icon: Upload,
     });
-  }
 
-  if (user?.role === 'admin' && user?.status === 'approved') {
     navigationItems.push({
       title: "Generate Reports",
       url: createPageUrl("Reports"),
       icon: FileText,
     });
-  }
 
-  if (user?.role === 'admin' && user?.status === 'approved') {
     navigationItems.push({
       title: "User Management",
       url: createPageUrl("UserManagement"),
       icon: Users,
     });
-  }
 
-  if (user?.role === 'admin' && user?.status === 'approved') {
     navigationItems.push({
       title: "Delete All Vehicles",
       url: createPageUrl("DeleteAllVehicles"),
