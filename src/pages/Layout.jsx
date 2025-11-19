@@ -2,7 +2,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, ClipboardList, Database, FileText, Menu, X, AlertCircle, Upload } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, Database, FileText, Menu, X, AlertCircle, Upload } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -61,12 +61,6 @@ function LayoutContent({ children, currentPageName }) {
       title: "Manage Complaints",
       url: createPageUrl("ManageComplaints"),
       icon: FileText,
-    });
-
-    navigationItems.push({
-      title: "Vehicle Log Entry",
-      url: createPageUrl("VehicleLogEntry"),
-      icon: ClipboardList,
     });
 
     navigationItems.push({
