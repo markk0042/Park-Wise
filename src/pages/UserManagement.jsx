@@ -1,17 +1,36 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle, XCircle, Clock, Shield, User, Users } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle, XCircle, Clock, Shield, User, Users, UserPlus, Trash2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listUsers, updateUser as updateUserApi } from "@/api";
+import { listUsers, updateUser as updateUserApi, inviteUser as inviteUserApi, deleteUser as deleteUserApi } from "@/api";
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
   const { profile: currentUser } = useAuth();
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'user', status: 'approved' });
+  const [inviteError, setInviteError] = useState('');
+
+  // Check if current user is super admin (you can set your email here or via env)
+  const SUPER_ADMIN_EMAIL = import.meta.env.VITE_SUPER_ADMIN_EMAIL || '';
+  const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
+  
+  // Debug: Log to console (remove after testing)
+  if (currentUser?.email) {
+    console.log('Current user email:', currentUser.email);
+    console.log('Super admin email from env:', SUPER_ADMIN_EMAIL);
+    console.log('Is super admin:', isSuperAdmin);
+  }
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['allUsers'],
@@ -26,6 +45,36 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['allUsers'] });
     },
   });
+
+  const inviteUserMutation = useMutation({
+    mutationFn: (data) => inviteUserApi(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allUsers'] });
+      setInviteDialogOpen(false);
+      setInviteForm({ email: '', full_name: '', role: 'user', status: 'approved' });
+      setInviteError('');
+    },
+    onError: (error) => {
+      setInviteError(error.message || 'Failed to invite user');
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId) => deleteUserApi(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allUsers'] });
+    },
+  });
+
+  const handleInvite = (e) => {
+    e.preventDefault();
+    setInviteError('');
+    if (!inviteForm.email) {
+      setInviteError('Email is required');
+      return;
+    }
+    inviteUserMutation.mutate(inviteForm);
+  };
 
   if (currentUser?.role !== 'admin') {
     return (
@@ -50,14 +99,123 @@ export default function UserManagement() {
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
-        <div className="mb-6 md:mb-8 text-center">
-          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900 flex items-center justify-center gap-2 md:gap-3 flex-wrap">
-            <Users className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 shrink-0" />
-            User Management
-          </h1>
-          <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">
-            Manage user access requests and permissions
-          </p>
+        <div className="mb-6 md:mb-8">
+          <div className="text-center mb-4">
+            <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900 flex items-center justify-center gap-2 md:gap-3 flex-wrap">
+              <Users className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 shrink-0" />
+              User Management
+            </h1>
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">
+              Manage user access requests and permissions
+            </p>
+          </div>
+          {/* Debug info - remove after setting up */}
+          {!isSuperAdmin && currentUser?.email && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-center">
+              <p className="text-xs text-amber-800">
+                <strong>Your email:</strong> {currentUser.email}
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Set VITE_SUPER_ADMIN_EMAIL to this email in Vercel to enable invite/delete features
+              </p>
+            </div>
+          )}
+          
+          {isSuperAdmin && (
+            <div className="flex justify-center">
+              <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-slate-900 hover:bg-slate-800">
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Invite User
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Invite New User</DialogTitle>
+                    <DialogDescription>
+                      Send an invitation email to a new user. They will receive a magic link to sign in.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleInvite}>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={inviteForm.email}
+                          onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                          placeholder="user@example.com"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="full_name">Full Name</Label>
+                        <Input
+                          id="full_name"
+                          value={inviteForm.full_name}
+                          onChange={(e) => setInviteForm({ ...inviteForm, full_name: e.target.value })}
+                          placeholder="John Doe"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="role">Role</Label>
+                        <Select
+                          value={inviteForm.role}
+                          onValueChange={(value) => setInviteForm({ ...inviteForm, role: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="status">Status</Label>
+                        <Select
+                          value={inviteForm.status}
+                          onValueChange={(value) => setInviteForm({ ...inviteForm, status: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="approved">Approved</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {inviteError && (
+                        <Alert variant="destructive">
+                          <AlertDescription>{inviteError}</AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setInviteDialogOpen(false);
+                          setInviteForm({ email: '', full_name: '', role: 'user', status: 'approved' });
+                          setInviteError('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={inviteUserMutation.isPending}>
+                        {inviteUserMutation.isPending ? 'Sending...' : 'Send Invitation'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
@@ -144,39 +302,57 @@ export default function UserManagement() {
                             </Badge>
                           </TableCell>
                           <TableCell className="px-3 md:px-4">
-                            {user.id !== currentUser.id && (
-                              <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                                {user.status !== 'approved' && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => updateUserMutation.mutate({ 
-                                      userId: user.id, 
-                                      data: { status: 'approved' } 
-                                    })}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-xs px-2 py-1 h-8 whitespace-nowrap"
-                                    disabled={updateUserMutation.isPending}
-                                  >
-                                    <CheckCircle className="w-3 h-3 sm:mr-1" />
-                                    <span className="hidden sm:inline">Approve</span>
-                                  </Button>
-                                )}
-                                {user.status !== 'rejected' && (
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => updateUserMutation.mutate({ 
-                                      userId: user.id, 
-                                      data: { status: 'rejected' } 
-                                    })}
-                                    disabled={updateUserMutation.isPending}
-                                    className="text-xs px-2 py-1 h-8 whitespace-nowrap"
-                                  >
-                                    <XCircle className="w-3 h-3 sm:mr-1" />
-                                    <span className="hidden sm:inline">Reject</span>
-                                  </Button>
-                                )}
-                              </div>
-                            )}
+                            <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                              {user.id !== currentUser.id && (
+                                <>
+                                  {user.status !== 'approved' && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => updateUserMutation.mutate({ 
+                                        userId: user.id, 
+                                        data: { status: 'approved' } 
+                                      })}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-xs px-2 py-1 h-8 whitespace-nowrap"
+                                      disabled={updateUserMutation.isPending}
+                                    >
+                                      <CheckCircle className="w-3 h-3 sm:mr-1" />
+                                      <span className="hidden sm:inline">Approve</span>
+                                    </Button>
+                                  )}
+                                  {user.status !== 'rejected' && (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() => updateUserMutation.mutate({ 
+                                        userId: user.id, 
+                                        data: { status: 'rejected' } 
+                                      })}
+                                      disabled={updateUserMutation.isPending}
+                                      className="text-xs px-2 py-1 h-8 whitespace-nowrap"
+                                    >
+                                      <XCircle className="w-3 h-3 sm:mr-1" />
+                                      <span className="hidden sm:inline">Reject</span>
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                              {isSuperAdmin && user.id !== currentUser.id && (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => {
+                                    if (confirm(`Are you sure you want to delete ${user.email}? This action cannot be undone.`)) {
+                                      deleteUserMutation.mutate(user.id);
+                                    }
+                                  }}
+                                  disabled={deleteUserMutation.isPending}
+                                  className="text-xs px-2 py-1 h-8 whitespace-nowrap"
+                                >
+                                  <Trash2 className="w-3 h-3 sm:mr-1" />
+                                  <span className="hidden sm:inline">Delete</span>
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
