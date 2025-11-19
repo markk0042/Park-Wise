@@ -62,7 +62,7 @@ export const inviteUser = async (req, res, next) => {
       email: z.string().email(),
       full_name: z.string().min(1).optional(),
       role: z.enum(['user', 'admin']).default('user'),
-      status: z.enum(['pending', 'approved']).default('approved')
+      status: z.enum(['pending', 'approved']).default('pending') // Default to pending - requires super admin approval
     });
     
     const parsed = schema.parse(req.body);
