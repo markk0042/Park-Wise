@@ -58,13 +58,17 @@ export function AuthProvider({ children }) {
       error,
       isAuthenticated: Boolean(session && profile),
       signOut: () => supabase.auth.signOut(),
-      signInWithOtp: (email) =>
-        supabase.auth.signInWithOtp({
+      signInWithOtp: (email) => {
+        // Always use the Vercel URL for redirects
+        const redirectUrl = 'https://park-wise-two.vercel.app';
+        
+        return supabase.auth.signInWithOtp({
           email,
           options: {
-            emailRedirectTo: window.location.origin + window.location.pathname,
+            emailRedirectTo: redirectUrl,
           },
-        }),
+        });
+      },
     }),
     [session, profile, loading, error]
   );
