@@ -37,20 +37,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, redirec
 
   // Check if admin access is required
   if (requireAdmin && user.role !== 'admin') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-md text-center space-y-4">
-          <div className="w-16 h-16 mx-auto bg-red-100 rounded-full flex items-center justify-center">
-            <AlertCircle className="w-8 h-8 text-red-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900">Access Restricted</h2>
-          <p className="text-slate-600">
-            This page is only available to administrators. You have been redirected to the Dashboard.
-          </p>
-          <Navigate to={redirectTo} replace />
-        </div>
-      </div>
-    );
+    return <Navigate to={redirectTo} replace />;
   }
 
   return children;
