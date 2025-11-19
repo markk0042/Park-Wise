@@ -83,6 +83,20 @@ export default function VehicleDatabase() {
     },
   });
 
+  const updateParkingTypesMutation = useMutation({
+    mutationFn: () => updateAllParkingTypes(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      setSuccessMessage(`✓ Updated ${data.updated} of ${data.total} vehicles based on permit numbers!`);
+      setTimeout(() => setSuccessMessage(""), 5000);
+    },
+    onError: (error) => {
+      console.error("Failed to update parking types:", error);
+      setErrorMessage(`Failed to update parking types: ${error.message || 'Please try again'}`);
+      setTimeout(() => setErrorMessage(""), 5000);
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       registration_plate: "",
