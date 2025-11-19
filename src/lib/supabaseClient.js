@@ -13,5 +13,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     persistSession: true,
     autoRefreshToken: true,
+    redirectTo: 'https://park-wise-two.vercel.app',
   },
 });
