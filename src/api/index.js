@@ -18,12 +18,12 @@ export const updateUser = async (id, payload) => {
   return user;
 };
 export const inviteUser = async (payload) => {
-  const { user, message } = await httpClient.post('/auth/users/invite', payload);
-  return { user, message };
+  const result = await httpClient.post('/auth/users/invite', payload);
+  return result;
 };
 export const deleteUser = async (id) => {
-  const { success, message } = await httpClient.delete(`/auth/users/${id}`);
-  return { success, message };
+  const result = await httpClient.delete(`/auth/users/${id}`);
+  return result;
 };
 
 // Vehicles
