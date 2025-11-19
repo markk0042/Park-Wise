@@ -75,7 +75,8 @@ function _getCurrentPage(url) {
 function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
-    const { isAuthenticated, loading, error } = useAuth();
+    // Call useAuth only once and get all needed values
+    const { isAuthenticated, loading, error, profile: user } = useAuth();
 
     if (loading) {
         return (
@@ -99,9 +100,6 @@ function PagesContent() {
     if (!isAuthenticated) {
         return <Login />;
     }
-
-    // Get user profile to check status
-    const { profile: user } = useAuth();
     
     // Block pending users from accessing the app
     if (user?.status === 'pending') {
@@ -139,9 +137,6 @@ function PagesContent() {
             </div>
         );
     }
-    
-    // Get user profile for route protection
-    const { profile: user } = useAuth();
     
     // Default redirect based on user role
     const defaultRoute = user?.role === 'admin' ? '/UserManagement' : '/Dashboard';
