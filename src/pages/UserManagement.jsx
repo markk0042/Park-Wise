@@ -106,7 +106,10 @@ export default function UserManagement() {
               User Management
             </h1>
             <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">
-              Manage user access requests and permissions
+              {isSuperAdmin 
+                ? "Approve or reject user access requests (Super Admin Only)"
+                : "View user access requests and permissions"
+              }
             </p>
           </div>
           {/* Debug info - remove after setting up */}
@@ -122,7 +125,12 @@ export default function UserManagement() {
           )}
           
           {isSuperAdmin && (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="text-center">
+                <p className="text-sm text-slate-600 mb-2">
+                  <strong className="text-slate-900">Super Admin:</strong> Only you can approve/reject users and invite new users
+                </p>
+              </div>
               <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-slate-900 hover:bg-slate-800">
@@ -175,7 +183,7 @@ export default function UserManagement() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="status">Status</Label>
+                        <Label htmlFor="status">Initial Status</Label>
                         <Select
                           value={inviteForm.status}
                           onValueChange={(value) => setInviteForm({ ...inviteForm, status: value })}
@@ -184,10 +192,13 @@ export default function UserManagement() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="approved">Approved</SelectItem>
+                            <SelectItem value="pending">Pending (Requires Approval)</SelectItem>
+                            <SelectItem value="approved">Approved (Auto-Approved)</SelectItem>
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-slate-500">
+                          New users will need super admin approval unless set to "Approved"
+                        </p>
                       </div>
                       {inviteError && (
                         <Alert variant="destructive">
@@ -303,7 +314,8 @@ export default function UserManagement() {
                           </TableCell>
                           <TableCell className="px-3 md:px-4">
                             <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                              {user.id !== currentUser.id && (
+                              {/* Only super admin can approve/reject users */}
+                              {isSuperAdmin && user.id !== currentUser.id && (
                                 <>
                                   {user.status !== 'approved' && (
                                     <Button
@@ -323,15 +335,38 @@ export default function UserManagement() {
                                     <Button
                                       size="sm"
                                       variant="destructive"
-                                      onClick={() => updateUserMutation.mutate({ 
-                                        userId: user.id, 
-                                        data: { status: 'rejected' } 
-                                      })}
+                                      onClick={() => {
+                                        if (confirm(`Are you sure you want to reject ${user.email}? They will lose access to the app.`)) {
+                                          updateUserMutation.mutate({ 
+                                            userId: user.id, 
+                                            data: { status: 'rejected' } 
+                                          });
+                                        }
+                                      }}
                                       disabled={updateUserMutation.isPending}
                                       className="text-xs px-2 py-1 h-8 whitespace-nowrap"
                                     >
                                       <XCircle className="w-3 h-3 sm:mr-1" />
                                       <span className="hidden sm:inline">Reject</span>
+                                    </Button>
+                                  )}
+                                  {user.status === 'approved' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        if (confirm(`Are you sure you want to revoke access for ${user.email}? They will be set to pending.`)) {
+                                          updateUserMutation.mutate({ 
+                                            userId: user.id, 
+                                            data: { status: 'pending' } 
+                                          });
+                                        }
+                                      }}
+                                      disabled={updateUserMutation.isPending}
+                                      className="text-xs px-2 py-1 h-8 whitespace-nowrap border-amber-300 text-amber-700 hover:bg-amber-50"
+                                    >
+                                      <Clock className="w-3 h-3 sm:mr-1" />
+                                      <span className="hidden sm:inline">Revoke</span>
                                     </Button>
                                   )}
                                 </>

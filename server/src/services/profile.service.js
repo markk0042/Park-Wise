@@ -20,7 +20,7 @@ export const findOrCreateProfile = async (user) => {
     email: user.email,
     full_name: user.user_metadata?.full_name || user.email?.split('@')[0],
     role: 'user',
-    status: 'pending',
+    status: 'pending', // All new users start as pending - requires super admin approval
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
