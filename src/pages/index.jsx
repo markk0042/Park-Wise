@@ -26,8 +26,9 @@ import YellowCarPark from "./YellowCarPark";
 
 import DeleteAllVehicles from "./DeleteAllVehicles";
 
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
 import { Clock, XCircle } from 'lucide-react';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 const PAGES = {
     
@@ -139,36 +140,127 @@ function PagesContent() {
         );
     }
     
+    // Get user profile for route protection
+    const { profile: user } = useAuth();
+    
+    // Default redirect based on user role
+    const defaultRoute = user?.role === 'admin' ? '/UserManagement' : '/Dashboard';
+    
     return (
         <Layout currentPageName={currentPage}>
             <Routes>            
+                {/* Root redirect */}
+                <Route path="/" element={<Navigate to={defaultRoute} replace />} />
                 
-                    <Route path="/" element={<UserManagement />} />
+                {/* Public routes - Available to all approved users */}
+                <Route 
+                    path="/Dashboard" 
+                    element={
+                        <ProtectedRoute>
+                            <Dashboard />
+                        </ProtectedRoute>
+                    } 
+                />
                 
+                <Route 
+                    path="/NonComplianceReport" 
+                    element={
+                        <ProtectedRoute>
+                            <NonComplianceReport />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/UserManagement" element={<UserManagement />} />
+                {/* Admin-only routes */}
+                <Route 
+                    path="/UserManagement" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <UserManagement />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/Dashboard" element={<Dashboard />} />
+                <Route 
+                    path="/AdminSetup" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <AdminSetup />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/AdminSetup" element={<AdminSetup />} />
+                <Route 
+                    path="/VehicleLogEntry" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <VehicleLogEntry />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/VehicleLogEntry" element={<VehicleLogEntry />} />
+                <Route 
+                    path="/VehicleDatabase" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <VehicleDatabase />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/VehicleDatabase" element={<VehicleDatabase />} />
+                <Route 
+                    path="/BulkUpload" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <BulkUpload />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/BulkUpload" element={<BulkUpload />} />
+                <Route 
+                    path="/Reports" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <Reports />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/Reports" element={<Reports />} />
+                <Route 
+                    path="/ManageComplaints" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <ManageComplaints />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/NonComplianceReport" element={<NonComplianceReport />} />
+                <Route 
+                    path="/GreenCarPark" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <GreenCarPark />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/ManageComplaints" element={<ManageComplaints />} />
+                <Route 
+                    path="/YellowCarPark" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <YellowCarPark />
+                        </ProtectedRoute>
+                    } 
+                />
                 
-                <Route path="/GreenCarPark" element={<GreenCarPark />} />
-                
-                <Route path="/YellowCarPark" element={<YellowCarPark />} />
-                
-                <Route path="/DeleteAllVehicles" element={<DeleteAllVehicles />} />
+                <Route 
+                    path="/DeleteAllVehicles" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <DeleteAllVehicles />
+                        </ProtectedRoute>
+                    } 
+                />
                 
             </Routes>
         </Layout>
