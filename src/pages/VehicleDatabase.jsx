@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 import { createVehicle, deleteVehicle, fetchVehicles, updateVehicle } from "@/api";
+import { getParkingTypeFromPermit, autoAssignParkingType } from "@/utils/permitUtils";
 
 export default function VehicleDatabase() {
   const [showForm, setShowForm] = useState(false);
@@ -108,10 +109,12 @@ export default function VehicleDatabase() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Auto-assign parking type based on permit number if not explicitly set
+    const vehicleData = autoAssignParkingType(formData);
     if (editingVehicle) {
-      updateVehicleMutation.mutate({ id: editingVehicle.id, data: formData });
+      updateVehicleMutation.mutate({ id: editingVehicle.id, data: vehicleData });
     } else {
-      createVehicleMutation.mutate(formData);
+      createVehicleMutation.mutate(vehicleData);
     }
   };
 
@@ -282,7 +285,15 @@ export default function VehicleDatabase() {
                       <Input
                         id="permit_number"
                         value={formData.permit_number}
-                        onChange={(e) => setFormData({...formData, permit_number: e.target.value.toUpperCase()})}
+                        onChange={(e) => {
+                          const permitNumber = e.target.value.toUpperCase();
+                          const autoParkingType = getParkingTypeFromPermit(permitNumber, formData.parking_type);
+                          setFormData({
+                            ...formData,
+                            permit_number: permitNumber,
+                            parking_type: autoParkingType
+                          });
+                        }}
                         placeholder="e.g., 00001 or P-12345"
                         className="text-base md:text-lg font-mono uppercase h-11 md:h-12"
                       />
@@ -404,7 +415,15 @@ export default function VehicleDatabase() {
                     <Input
                       id="edit_permit_number"
                       value={formData.permit_number}
-                      onChange={(e) => setFormData({...formData, permit_number: e.target.value.toUpperCase()})}
+                      onChange={(e) => {
+                        const permitNumber = e.target.value.toUpperCase();
+                        const autoParkingType = getParkingTypeFromPermit(permitNumber, formData.parking_type);
+                        setFormData({
+                          ...formData,
+                          permit_number: permitNumber,
+                          parking_type: autoParkingType
+                        });
+                      }}
                       placeholder="e.g., 00001 or P-12345"
                       className="text-base md:text-lg font-mono uppercase h-11 md:h-12"
                     />

@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Download, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { bulkInsertVehicles } from "@/api";
+import { autoAssignParkingType } from "@/utils/permitUtils";
 
 export default function BulkUpload() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -92,14 +93,18 @@ export default function BulkUpload() {
       
       const normalizedVehicles = parsedRows
         .filter(v => v.registration_plate && v.registration_plate.trim()) // Filter out empty rows
-        .map(v => ({
-          registration_plate: v.registration_plate?.toUpperCase().trim(),
-          permit_number: v.permit_number?.toUpperCase().trim() || "",
-          country: v.country?.trim() || "Ireland",
-          parking_type: v.parking_type?.trim() || "Green",
-          notes: v.notes?.trim() || "",
-          is_active: true
-        }));
+        .map(v => {
+          const vehicleData = {
+            registration_plate: v.registration_plate?.toUpperCase().trim(),
+            permit_number: v.permit_number?.toUpperCase().trim() || "",
+            country: v.country?.trim() || "Ireland",
+            parking_type: v.parking_type?.trim() || "", // Will be auto-assigned if empty
+            notes: v.notes?.trim() || "",
+            is_active: true
+          };
+          // Auto-assign parking type based on permit number
+          return autoAssignParkingType(vehicleData);
+        });
 
       if (normalizedVehicles.length === 0) {
         throw new Error("No valid vehicles found. Ensure your CSV has at least one row with a registration_plate value.");
