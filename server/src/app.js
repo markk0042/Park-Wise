@@ -17,6 +17,17 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'ParkingLog API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      docs: 'See README.md for API documentation'
+    }
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
