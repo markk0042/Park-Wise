@@ -1,6 +1,6 @@
 import { httpClient } from './httpClient';
 
-// Auth
+// Auth endpoints
 export const fetchCurrentUser = async () => {
   const { user } = await httpClient.get('/auth/me');
   return user;
