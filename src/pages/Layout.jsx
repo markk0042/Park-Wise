@@ -2,7 +2,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, ClipboardList, Database, FileText, Menu, X, AlertCircle } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, ClipboardList, Database, FileText, Menu, X, AlertCircle, Upload } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -91,6 +91,14 @@ function LayoutContent({ children, currentPageName }) {
       title: "Vehicle Database",
       url: createPageUrl("VehicleDatabase"),
       icon: Database,
+    });
+  }
+
+  if (user?.role === 'admin' && user?.status === 'approved') {
+    navigationItems.push({
+      title: "Bulk Upload",
+      url: createPageUrl("BulkUpload"),
+      icon: Upload,
     });
   }
 

@@ -18,11 +18,48 @@ export default function BulkUpload() {
   const parseCsv = (text) => {
     const rows = text.trim().split(/\r?\n/).filter(Boolean);
     if (rows.length <= 1) return [];
-    const headers = rows[0].split(',').map((h) => h.trim().toLowerCase());
+    
+    // Parse header row - handle quoted fields
+    const parseRow = (row) => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < row.length; i++) {
+        const char = row[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+    
+    const headers = parseRow(rows[0]).map((h) => h.replace(/^"|"$/g, '').trim().toLowerCase());
+    
+    // Normalize header names (handle variations)
+    const normalizedHeaders = headers.map(h => {
+      const normalized = h.replace(/[_\s-]/g, '_').toLowerCase();
+      if (normalized.includes('registration') || normalized.includes('plate') || normalized.includes('reg')) {
+        return 'registration_plate';
+      }
+      if (normalized.includes('permit')) {
+        return 'permit_number';
+      }
+      if (normalized.includes('parking') || normalized.includes('type') || normalized.includes('color')) {
+        return 'parking_type';
+      }
+      return normalized;
+    });
+    
     return rows.slice(1).map((row) => {
-      const values = row.split(',').map((value) => value.trim());
+      const values = parseRow(row).map((value) => value.replace(/^"|"$/g, '').trim());
       const record = {};
-      headers.forEach((header, index) => {
+      normalizedHeaders.forEach((header, index) => {
         record[header] = values[index] ?? "";
       });
       return record;
@@ -46,14 +83,27 @@ export default function BulkUpload() {
       }
 
       setUploadStatus("processing");
-      const normalizedVehicles = parsedRows.map(v => ({
-        registration_plate: v.registration_plate?.toUpperCase().trim(),
-        permit_number: v.permit_number?.toUpperCase().trim() || "",
-        country: v.country?.trim() || "Ireland",
-        parking_type: v.parking_type?.trim() || "Green",
-        notes: v.notes?.trim() || "",
-        is_active: true
-      }));
+      
+      // Validate that we have registration_plate column
+      if (parsedRows.length > 0 && !parsedRows[0].registration_plate) {
+        const foundColumns = Object.keys(parsedRows[0]).join(', ');
+        throw new Error(`Missing required column 'registration_plate'. Found columns: ${foundColumns || 'none'}. Please ensure your CSV has a header row with 'registration_plate' (or variations like 'Registration Plate', 'Reg Plate', etc.).`);
+      }
+      
+      const normalizedVehicles = parsedRows
+        .filter(v => v.registration_plate && v.registration_plate.trim()) // Filter out empty rows
+        .map(v => ({
+          registration_plate: v.registration_plate?.toUpperCase().trim(),
+          permit_number: v.permit_number?.toUpperCase().trim() || "",
+          country: v.country?.trim() || "Ireland",
+          parking_type: v.parking_type?.trim() || "Green",
+          notes: v.notes?.trim() || "",
+          is_active: true
+        }));
+
+      if (normalizedVehicles.length === 0) {
+        throw new Error("No valid vehicles found. Ensure your CSV has at least one row with a registration_plate value.");
+      }
 
       setUploadStatus("saving");
       await bulkInsertVehicles(normalizedVehicles);
