@@ -22,7 +22,7 @@ export default function UserManagement() {
   const [inviteError, setInviteError] = useState('');
 
   // Check if current user is super admin (you can set your email here or via env)
-  const SUPER_ADMIN_EMAIL = import.meta.env.VITE_SUPER_ADMIN_EMAIL || '';
+  const SUPER_ADMIN_EMAIL = import.meta.env.VITE_SUPER_ADMIN_EMAIL || 'markk0042@gmail.com';
   const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
   
   // Debug: Log to console (remove after testing)
