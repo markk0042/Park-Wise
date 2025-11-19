@@ -18,24 +18,59 @@ export default function ComplaintReportGenerator({ complaints, selectedIds, onCl
   const handlePrint = async () => {
     setGenerating(true);
     
-    // Wait for all images to load before printing
+    // Preload all images to ensure they're available for printing
     const images = document.querySelectorAll('.evidence-image');
-    const imagePromises = Array.from(images).map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise((resolve) => {
-        img.onload = resolve;
-        img.onerror = resolve; // Resolve even on error to not block printing
-        setTimeout(resolve, 5000); // Timeout after 5 seconds
+    const imagePromises = Array.from(images).map((img, index) => {
+      return new Promise((resolve, reject) => {
+        // If image is already loaded, resolve immediately
+        if (img.complete && img.naturalHeight !== 0) {
+          resolve();
+          return;
+        }
+        
+        // Set up load and error handlers
+        const handleLoad = () => {
+          img.removeEventListener('load', handleLoad);
+          img.removeEventListener('error', handleError);
+          resolve();
+        };
+        
+        const handleError = () => {
+          img.removeEventListener('load', handleLoad);
+          img.removeEventListener('error', handleError);
+          console.warn(`Image ${index + 1} failed to load:`, img.src);
+          // Resolve anyway to not block printing, but log the error
+          resolve();
+        };
+        
+        img.addEventListener('load', handleLoad);
+        img.addEventListener('error', handleError);
+        
+        // Force reload if src exists but image hasn't loaded
+        if (img.src && !img.complete) {
+          const currentSrc = img.src;
+          img.src = '';
+          setTimeout(() => {
+            img.src = currentSrc;
+          }, 100);
+        }
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          img.removeEventListener('load', handleLoad);
+          img.removeEventListener('error', handleError);
+          resolve(); // Resolve anyway to not block printing
+        }, 10000);
       });
     });
     
     await Promise.all(imagePromises);
     
-    // Small delay to ensure rendering is complete
-    setTimeout(() => {
-      setGenerating(false);
-      window.print();
-    }, 500);
+    // Additional delay to ensure all images are rendered
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    setGenerating(false);
+    window.print();
   };
 
   const statusLabels = {
@@ -187,16 +222,25 @@ export default function ComplaintReportGenerator({ complaints, selectedIds, onCl
                           src={complaint.image_url}
                           alt="Evidence"
                           className="evidence-image"
-                          style={{ maxHeight: '500px', objectFit: 'contain', margin: '0 auto' }}
+                          style={{ maxHeight: '500px', objectFit: 'contain', margin: '0 auto', display: 'block' }}
                           loading="eager"
                           crossOrigin="anonymous"
+                          referrerPolicy="no-referrer"
+                          onLoad={(e) => {
+                            // Ensure image is visible when loaded
+                            e.target.style.display = 'block';
+                            const errorDiv = e.target.nextElementSibling;
+                            if (errorDiv) errorDiv.style.display = 'none';
+                          }}
                           onError={(e) => {
+                            console.error('Image failed to load:', complaint.image_url);
                             e.target.style.display = 'none';
-                            e.target.nextSibling.style.display = 'block';
+                            const errorDiv = e.target.nextElementSibling;
+                            if (errorDiv) errorDiv.style.display = 'block';
                           }}
                         />
                         <div style={{ display: 'none', padding: '20px', textAlign: 'center', color: '#64748b' }}>
-                          Image unavailable - check connection
+                          Image unavailable - check connection or URL: {complaint.image_url}
                         </div>
                       </div>
                     </div>

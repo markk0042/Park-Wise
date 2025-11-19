@@ -33,16 +33,28 @@ export default function NonComplianceReport() {
 
   const uploadImageMutation = useMutation({
     mutationFn: async (file) => {
-      const result = await uploadEvidence(file);
-      return result.file_url;
+      try {
+        const result = await uploadEvidence(file);
+        // Handle both response formats: { file_url } or direct file_url
+        const fileUrl = result?.file_url || result;
+        if (!fileUrl) {
+          throw new Error('No file URL returned from server');
+        }
+        return fileUrl;
+      } catch (error) {
+        console.error('Upload error:', error);
+        throw error;
+      }
     },
     onSuccess: (fileUrl) => {
       setFormData({ ...formData, image_url: fileUrl });
       setUploadingImage(false);
     },
-    onError: () => {
+    onError: (error) => {
       setUploadingImage(false);
-      alert("Failed to upload image. Please try again.");
+      const errorMessage = error?.message || error?.details?.error?.message || 'Failed to upload image. Please try again.';
+      console.error('Upload failed:', error);
+      alert(`Upload failed: ${errorMessage}`);
     },
   });
 

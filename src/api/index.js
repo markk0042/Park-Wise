@@ -71,10 +71,17 @@ export const deleteComplaint = (id) => httpClient.delete(`/complaints/${id}`);
 export const bulkDeleteComplaints = (ids) => httpClient.post('/complaints/bulk-delete', { ids });
 
 // Uploads
-export const uploadEvidence = (file) => {
+export const uploadEvidence = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
-  return httpClient.post('/uploads/evidence', formData);
+  try {
+    const result = await httpClient.post('/uploads/evidence', formData);
+    // Handle both response formats
+    return result?.file_url ? result : { file_url: result };
+  } catch (error) {
+    console.error('Upload evidence error:', error);
+    throw error;
+  }
 };
 
 // Reports
