@@ -50,7 +50,7 @@ export default function ReportGenerator({ logs }) {
   });
 
   const downloadCSV = () => {
-    // Prepare data rows with simplified format
+    // Prepare data rows matching Excel format
     const rows = sortedLogs.map(log => {
       let permitNumber = "Not Assigned";
       
@@ -64,33 +64,28 @@ export default function ReportGenerator({ logs }) {
         permitNumber = "Assigned (No # Stored)";
       }
       
-      // Determine permit color
-      let permitColor = "";
-      if (log.parking_type === "Green") {
-        permitColor = "Green";
-      } else if (log.parking_type === "Yellow") {
-        permitColor = "Yellow";
-      } else if (log.parking_type === "Red") {
-        permitColor = "Red";
-      }
+      // Format date as DD/MM/YY
+      const formattedDate = format(new Date(log.log_date), "dd/MM/yy");
       
+      // Return in format: Registration, empty, Permit, empty, Date
+      // This matches the Excel layout: A=Registrations, C=Permits, E=DD/MM/YY
       return [
-        log.registration_plate,
-        permitNumber,
-        permitColor
+        log.registration_plate,  // Column A
+        "",                       // Column B (empty)
+        permitNumber,             // Column C
+        "",                       // Column D (empty)
+        formattedDate             // Column E
       ];
     });
 
-    // Create CSV with new format
+    // Create CSV matching Excel layout
     const csvLines = [];
     
-    // Header row (spanned across all columns)
-    csvLines.push(`"PARKING LOG REPORT - ${format(new Date(startDate), "dd/MM/yyyy")} to ${format(new Date(endDate), "dd/MM/yyyy")}","",""`);
-    csvLines.push(`"Generated: ${format(new Date(), "dd/MM/yyyy 'at' HH:mm")}","",""`);
-    csvLines.push("");
+    // Row 1: Header "Car Park Report" centered (empty, empty, "Car Park Report", empty, empty)
+    csvLines.push(`"","","Car Park Report","",""`);
     
-    // Subheadings row
-    csvLines.push('"Registrations","Permit Numbers","Permit Color"');
+    // Row 2: Subheadings with spacing (Registrations, empty, Permits, empty, DD/MM/YY)
+    csvLines.push('"Registrations","","Permits","","DD/MM/YY"');
     
     // Data rows
     rows.forEach(row => {
@@ -105,7 +100,7 @@ export default function ReportGenerator({ logs }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `ParkingLog_Report_${startDate}_to_${endDate}.csv`;
+    link.download = `Car_Park_Report_${startDate}_to_${endDate}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
