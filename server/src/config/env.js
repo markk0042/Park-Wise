@@ -10,7 +10,8 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'Service role key is required'),
   SUPABASE_ANON_KEY: z.string().min(1, 'Anon key is required'),
   SUPABASE_STORAGE_BUCKET: z.string().default('complaint-evidence'),
-  CORS_ORIGIN: z.string().default('*')
+  CORS_ORIGIN: z.string().default('*'),
+  SUPER_ADMIN_EMAIL: z.string().email().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);

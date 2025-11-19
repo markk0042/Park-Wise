@@ -17,6 +17,14 @@ export const updateUser = async (id, payload) => {
   const { user } = await httpClient.patch(`/auth/users/${id}`, payload);
   return user;
 };
+export const inviteUser = async (payload) => {
+  const { user, message } = await httpClient.post('/auth/users/invite', payload);
+  return { user, message };
+};
+export const deleteUser = async (id) => {
+  const { success, message } = await httpClient.delete(`/auth/users/${id}`);
+  return { success, message };
+};
 
 // Vehicles
 export const fetchVehicles = async (orderBy = 'permit_number') => {

@@ -59,3 +59,13 @@ export const updateProfile = async (id, payload) => {
   if (error) throw error;
   return data;
 };
+
+export const deleteProfile = async (id) => {
+  const { error } = await supabaseAdmin
+    .from(PROFILE_TABLE)
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+  return { success: true };
+};

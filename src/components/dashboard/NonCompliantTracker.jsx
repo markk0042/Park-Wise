@@ -18,34 +18,53 @@ export default function NonCompliantTracker({ logs }) {
     return logDate >= monthStart && logDate <= monthEnd;
   });
 
-  // Identify violations
+  // Identify violations: Red (unregistered) or Yellow permits logged in current month
   const violations = {};
   
   currentMonthLogs.forEach(log => {
     const plate = log.registration_plate;
+    const parkingType = log.parking_type;
     const notes = log.notes?.toLowerCase() || "";
     
-    // Check for violations based on notes
+    // Check for Red (unregistered) vehicles
+    const isRedUnregistered = parkingType === 'Red';
+    
+    // Check for Yellow permit vehicles
+    const isYellowPermit = parkingType === 'Yellow';
+    
+    // Determine violation type and location
     let violationType = null;
     let location = null;
     
-    if (notes.includes("violation") || notes.includes("non-compliant")) {
+    if (isRedUnregistered) {
+      // Red/unregistered vehicle
       if (notes.includes("green car park")) {
         location = "Green Car Park";
-        if (notes.includes("yellow permit")) {
-          violationType = "Yellow permit in Green zone";
-        } else if (notes.includes("no permit") || notes.includes("unregistered")) {
-          violationType = "No permit in Green zone";
-        }
+        violationType = "Unregistered vehicle (Red)";
       } else if (notes.includes("yellow car park")) {
         location = "Yellow Car Park";
-        if (notes.includes("no permit") || notes.includes("unregistered")) {
-          violationType = "No permit in Yellow zone";
-        }
+        violationType = "Unregistered vehicle (Red)";
+      } else {
+        // Default location if not specified
+        location = "Unknown";
+        violationType = "Unregistered vehicle (Red)";
+      }
+    } else if (isYellowPermit) {
+      // Yellow permit vehicle
+      if (notes.includes("green car park")) {
+        location = "Green Car Park";
+        violationType = "Yellow permit in Green zone";
+      } else if (notes.includes("yellow car park")) {
+        location = "Yellow Car Park";
+        violationType = "Yellow permit logged";
+      } else {
+        location = "Unknown";
+        violationType = "Yellow permit logged";
       }
     }
     
-    if (violationType) {
+    // Add to violations if it's Red or Yellow
+    if (isRedUnregistered || isYellowPermit) {
       if (!violations[plate]) {
         violations[plate] = {
           plate,
@@ -64,8 +83,8 @@ export default function NonCompliantTracker({ logs }) {
     }
   });
 
-  // Filter to show only repeat offenders (more than once)
-  const repeatOffenders = Object.values(violations).filter(v => v.count > 1);
+  // Show only vehicles with Red or Yellow that have been logged MORE THAN ONCE in current month
+  const nonCompliantVehicles = Object.values(violations).filter(v => v.count > 1);
 
   return (
     <Card className="shadow-lg border-2 border-red-200 bg-red-50">
@@ -76,7 +95,7 @@ export default function NonCompliantTracker({ logs }) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-bold text-red-900 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-600" />
-            Non-Compliant Parking Alerts ({repeatOffenders.length})
+            Non-Compliant Parking Alerts ({nonCompliantVehicles.length})
           </CardTitle>
           {expanded ? (
             <ChevronUp className="w-5 h-5 text-red-600" />
@@ -85,21 +104,21 @@ export default function NonCompliantTracker({ logs }) {
           )}
         </div>
         <p className="text-sm text-red-700 mt-1">
-          Vehicles with multiple violations this month ({format(currentDate, 'MMMM yyyy')})
+          Red (unregistered) and Yellow permit vehicles logged multiple times this month ({format(currentDate, 'MMMM yyyy')})
         </p>
       </CardHeader>
       
       {expanded && (
         <CardContent className="space-y-3">
-          {repeatOffenders.length === 0 ? (
+          {nonCompliantVehicles.length === 0 ? (
             <div className="text-center py-8 text-slate-600">
-              <p className="text-sm">No repeat violations detected this month.</p>
+              <p className="text-sm">No repeat non-compliant vehicles detected this month.</p>
               <p className="text-xs mt-2 text-slate-500">
-                Vehicles with multiple non-compliant parkings will appear here.
+                Red (unregistered) and Yellow permit vehicles logged more than once this month will appear here.
               </p>
             </div>
           ) : (
-            repeatOffenders.map((offender) => (
+            nonCompliantVehicles.map((offender) => (
             <div
               key={offender.plate}
               className="bg-white border-2 border-red-300 rounded-lg p-4 space-y-3"
@@ -110,7 +129,7 @@ export default function NonCompliantTracker({ logs }) {
                     {offender.plate}
                   </p>
                   <Badge className="bg-red-600 text-white mt-1">
-                    {offender.count} violations this month
+                    {offender.count} {offender.count === 1 ? 'log' : 'logs'} this month
                   </Badge>
                 </div>
               </div>
