@@ -50,96 +50,52 @@ export default function ReportGenerator({ logs }) {
   });
 
   const downloadCSV = () => {
-    // Calculate statistics
-    const greenCount = sortedLogs.filter(log => log.parking_type === "Green").length;
-    const yellowCount = sortedLogs.filter(log => log.parking_type === "Yellow").length;
-    const redCount = sortedLogs.filter(log => log.parking_type === "Red").length;
-    const uniquePlates = new Set(sortedLogs.map(log => log.registration_plate)).size;
-    
-    // Enhanced CSV with professional formatting
-    const headers = [
-      "Permit Number",
-      "Registration Plate", 
-      "Parking Type",
-      "Date",
-      "Time",
-      "Additional Notes"
-    ];
-    
+    // Prepare data rows with simplified format
     const rows = sortedLogs.map(log => {
       let permitNumber = "Not Assigned";
-      let additionalNotes = log.notes || "";
       
       // Check if notes contain permit information
       if (log.notes?.includes("Permit:")) {
         const match = log.notes.match(/Permit:\s*(.+?)(?:\s*-|$)/);
         permitNumber = match ? match[1].trim() : log.notes.replace("Permit:", "").trim();
-        additionalNotes = "";
       } else if (log.notes?.includes("No permit")) {
         permitNumber = "No Permit";
-        additionalNotes = "";
       } else if (log.parking_type === "Green" || log.parking_type === "Yellow") {
-        // For Green/Yellow permits without notes, mark as assigned but no number stored
         permitNumber = "Assigned (No # Stored)";
       }
       
+      // Determine permit color
+      let permitColor = "";
+      if (log.parking_type === "Green") {
+        permitColor = "Green";
+      } else if (log.parking_type === "Yellow") {
+        permitColor = "Yellow";
+      } else if (log.parking_type === "Red") {
+        permitColor = "Red";
+      }
+      
       return [
-        permitNumber,
         log.registration_plate,
-        log.parking_type === "Green" ? "Green Car Park" : 
-        log.parking_type === "Yellow" ? "Yellow Car Park" : 
-        "Red (Unregistered)",
-        format(new Date(log.log_date), "dd/MM/yyyy"),
-        log.log_time || "",
-        additionalNotes
+        permitNumber,
+        permitColor
       ];
     });
 
-    // Create styled CSV with professional formatting
+    // Create CSV with new format
     const csvLines = [];
     
-    // Header Section
-    csvLines.push("=".repeat(80));
-    csvLines.push("PARKING LOG REPORT");
-    csvLines.push("=".repeat(80));
-    csvLines.push("");
-    csvLines.push(`Report Period: ${format(new Date(startDate), "dd/MM/yyyy")} to ${format(new Date(endDate), "dd/MM/yyyy")}`);
-    csvLines.push(`Generated: ${format(new Date(), "dd/MM/yyyy 'at' HH:mm")}`);
+    // Header row (spanned across all columns)
+    csvLines.push(`"PARKING LOG REPORT - ${format(new Date(startDate), "dd/MM/yyyy")} to ${format(new Date(endDate), "dd/MM/yyyy")}","",""`);
+    csvLines.push(`"Generated: ${format(new Date(), "dd/MM/yyyy 'at' HH:mm")}","",""`);
     csvLines.push("");
     
-    // Statistics Section
-    csvLines.push("-".repeat(80));
-    csvLines.push("SUMMARY STATISTICS");
-    csvLines.push("-".repeat(80));
-    csvLines.push(`Total Vehicle Logs: ${sortedLogs.length}`);
-    csvLines.push(`Unique Vehicles: ${uniquePlates}`);
-    csvLines.push("");
-    csvLines.push("Breakdown by Parking Type:");
-    csvLines.push(`  - Green Car Park: ${greenCount} (${((greenCount / sortedLogs.length) * 100).toFixed(1)}%)`);
-    csvLines.push(`  - Yellow Car Park: ${yellowCount} (${((yellowCount / sortedLogs.length) * 100).toFixed(1)}%)`);
-    csvLines.push(`  - Red (Unregistered): ${redCount} (${((redCount / sortedLogs.length) * 100).toFixed(1)}%)`);
-    csvLines.push("");
+    // Subheadings row
+    csvLines.push('"Registrations","Permit Numbers","Permit Color"');
     
-    // Data Section
-    csvLines.push("=".repeat(80));
-    csvLines.push("VEHICLE LOGS");
-    csvLines.push("Sorted by Permit Number: Lowest to Highest");
-    csvLines.push("=".repeat(80));
-    csvLines.push("");
-    
-    // Headers
-    csvLines.push(headers.join(","));
-    csvLines.push("-".repeat(80));
-    
-    // Data Rows
+    // Data rows
     rows.forEach(row => {
       csvLines.push(row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","));
     });
-    
-    csvLines.push("");
-    csvLines.push("-".repeat(80));
-    csvLines.push(`End of Report - ${sortedLogs.length} total entries`);
-    csvLines.push("-".repeat(80));
 
     const csvContent = csvLines.join("\n");
 
