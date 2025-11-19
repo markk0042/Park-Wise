@@ -352,6 +352,63 @@ See `server/README.md` for detailed API documentation.
 - Verify Node.js version compatibility
 - Check build logs for specific errors
 
+## 🗑️ Automatic Image Cleanup
+
+The app automatically deletes uploaded images older than 7 days to prevent storage bloat.
+
+### Setup Automatic Cleanup
+
+**Option 1: Using Render Cron Jobs (Recommended)**
+
+1. Go to your Render Dashboard
+2. Click **New** → **Cron Job**
+3. Configure:
+   - **Name**: `image-cleanup`
+   - **Schedule**: `0 2 * * *` (runs daily at 2 AM UTC)
+   - **Command**: `curl -X POST https://your-backend-url.onrender.com/api/uploads/cleanup?token=YOUR_SECRET_TOKEN`
+   - Replace `YOUR_SECRET_TOKEN` with a secure random string
+4. Add `CLEANUP_SECRET_TOKEN` to your backend environment variables in Render
+5. Click **Create Cron Job**
+
+**Option 2: Using External Cron Service**
+
+1. Sign up for a free cron service (e.g., cron-job.org, EasyCron)
+2. Create a new cron job:
+   - **URL**: `https://your-backend-url.onrender.com/api/uploads/cleanup?token=YOUR_SECRET_TOKEN`
+   - **Method**: POST
+   - **Schedule**: Daily at 2 AM
+3. Add `CLEANUP_SECRET_TOKEN` to your backend environment variables
+
+**Option 3: Manual Cleanup (Admin Only)**
+
+Admins can manually trigger cleanup by calling:
+```
+POST /api/uploads/cleanup
+```
+(Requires admin authentication)
+
+### Environment Variable
+
+Add to `server/.env` and Render environment variables:
+```env
+CLEANUP_SECRET_TOKEN=your-secure-random-token-here
+```
+
+Generate a secure token:
+```bash
+# On Mac/Linux
+openssl rand -hex 32
+
+# Or use any secure random string generator
+```
+
+### How It Works
+
+- Runs daily (or as scheduled)
+- Deletes images older than 7 days from Supabase Storage
+- Keeps storage usage low automatically
+- Logs cleanup results for monitoring
+
 ## 📱 Adding App to Home Screen
 
 You can add this app to your mobile device's home screen for quick access, making it feel like a native app.

@@ -11,7 +11,8 @@ const envSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1, 'Anon key is required'),
   SUPABASE_STORAGE_BUCKET: z.string().default('complaint-evidence'),
   CORS_ORIGIN: z.string().default('*'),
-  SUPER_ADMIN_EMAIL: z.string().email().optional()
+  SUPER_ADMIN_EMAIL: z.string().email().optional(),
+  CLEANUP_SECRET_TOKEN: z.string().optional() // Secret token for cleanup endpoint (for cron jobs)
 });
 
 const parsed = envSchema.safeParse(process.env);
