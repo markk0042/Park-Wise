@@ -209,6 +209,8 @@ All API endpoints are prefixed with `/api`:
 - `PATCH /api/auth/me` - Update own profile
 - `GET /api/auth/users` - List all users (admin only)
 - `PATCH /api/auth/users/:id` - Update user (admin only)
+- `POST /api/auth/users/invite` - Invite new user (super admin only)
+- `DELETE /api/auth/users/:id` - Delete user (super admin only)
 
 ### Vehicles
 - `GET /api/vehicles` - List all vehicles
@@ -261,11 +263,73 @@ See `server/README.md` for detailed API documentation.
 - ✅ Vehicle registration database
 - ✅ Parking log entries with date/time tracking
 - ✅ Bulk vehicle upload via CSV
-- ✅ Non-compliance complaint system
-- ✅ Photo evidence uploads
-- ✅ Reports and analytics
-- ✅ Admin user management
+- ✅ Non-compliance complaint system with photo evidence uploads
+- ✅ Reports and analytics with CSV export
+- ✅ PDF/Print functionality for reports
+- ✅ Admin user management (invite/delete users - super admin only)
 - ✅ Role-based access control
+- ✅ Non-compliant parking alerts (Red/Yellow vehicles logged multiple times)
+
+## 📊 Report Generation & Export
+
+### Parking Log Reports
+
+**Location**: Generate Reports page (Admin only)
+
+**Features**:
+- **Date Range Selection**: Filter logs by custom date range
+- **CSV Export**: Download formatted CSV files with Excel-compatible styling
+  - Header: "Car Park Report"
+  - Columns: Registrations | Permits | DD/MM/YY
+  - Sorted by permit number (lowest to highest)
+  - Professional formatting with proper spacing
+- **PDF/Print**: Generate printable PDF reports
+  - Click "Print / PDF" button
+  - Preview formatted report in dialog
+  - Print directly or save as PDF from browser
+  - Includes report header, date range, and formatted table
+
+**CSV Format**:
+```
+"","","Car Park Report","",""
+"Registrations","","Permits","","DD/MM/YY"
+"ABC123","","123","","15/11/24"
+"XYZ789","","456","","16/11/24"
+```
+
+### Category Reports
+
+**Location**: Dashboard → Click on category cards (Green/Yellow/Red)
+
+**Features**:
+- View logs filtered by parking type
+- Download CSV for specific category
+- Same formatting as custom reports
+
+### Complaint Reports
+
+**Location**: Manage Complaints page (Admin only)
+
+**Features**:
+- Select multiple complaints using checkboxes
+- Click "Generate Report" button
+- **PDF/Print**: Print or save as PDF
+  - Includes all selected complaints
+  - Photo evidence included in print
+  - Professional formatting with page breaks
+  - Summary statistics included
+
+### Non-Compliance Reports
+
+**Location**: Non-Compliance Report page
+
+**Features**:
+- **Image Upload**: Upload photo evidence (required)
+  - Supports PNG, JPG up to 10MB
+  - Images stored in Supabase Storage
+  - Preview before submission
+- Submit reports with vehicle registration, location, and description
+- Reports appear in Manage Complaints for admin review
 
 ## 🐛 Troubleshooting
 
