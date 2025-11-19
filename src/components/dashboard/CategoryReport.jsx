@@ -75,7 +75,13 @@ export default function CategoryReport({ logs, category, onBack, currentUser }) 
       return;
     }
 
-    // Enhanced CSV with better formatting
+    // Calculate statistics
+    const greenCount = sortedLogs.filter(log => log.parking_type === "Green").length;
+    const yellowCount = sortedLogs.filter(log => log.parking_type === "Yellow").length;
+    const redCount = sortedLogs.filter(log => log.parking_type === "Red").length;
+    const uniquePlates = new Set(sortedLogs.map(log => log.registration_plate)).size;
+
+    // Enhanced CSV with professional formatting
     const headers = [
       "Permit Number",
       "Registration Plate",
@@ -104,32 +110,66 @@ export default function CategoryReport({ logs, category, onBack, currentUser }) 
         log.parking_type === "Yellow" ? "Yellow Car Park" : 
         "Red (Unregistered)",
         format(new Date(log.log_date), "dd/MM/yyyy"),
-        log.log_time,
+        log.log_time || "",
         notes
       ];
     });
 
-    // Add summary section at the top
+    // Category name
     const categoryName = category === "all" ? "All Categories" : 
                         category === "Green" ? "Green Car Park" :
                         category === "Yellow" ? "Yellow Car Park" : 
                         "Red (Unregistered)";
 
-    const summary = [
-      ["PARKING LOG REPORT"],
-      [`Category: ${categoryName}`],
-      [`Total Vehicles Logged: ${sortedLogs.length}`],
-      [`Generated: ${format(new Date(), "dd/MM/yyyy HH:mm")}`],
-      [""],
-      ["VEHICLE LOGS (Sorted by Permit Number: Lowest to Highest)"],
-      [""]
-    ];
+    // Create styled CSV with professional formatting
+    const csvLines = [];
+    
+    // Header Section
+    csvLines.push("=".repeat(80));
+    csvLines.push("PARKING LOG REPORT");
+    csvLines.push("=".repeat(80));
+    csvLines.push("");
+    csvLines.push(`Category: ${categoryName}`);
+    csvLines.push(`Generated: ${format(new Date(), "dd/MM/yyyy 'at' HH:mm")}`);
+    csvLines.push("");
+    
+    // Statistics Section
+    csvLines.push("-".repeat(80));
+    csvLines.push("SUMMARY STATISTICS");
+    csvLines.push("-".repeat(80));
+    csvLines.push(`Total Vehicle Logs: ${sortedLogs.length}`);
+    csvLines.push(`Unique Vehicles: ${uniquePlates}`);
+    if (category === "all") {
+      csvLines.push("");
+      csvLines.push("Breakdown by Parking Type:");
+      csvLines.push(`  - Green Car Park: ${greenCount} (${sortedLogs.length > 0 ? ((greenCount / sortedLogs.length) * 100).toFixed(1) : 0}%)`);
+      csvLines.push(`  - Yellow Car Park: ${yellowCount} (${sortedLogs.length > 0 ? ((yellowCount / sortedLogs.length) * 100).toFixed(1) : 0}%)`);
+      csvLines.push(`  - Red (Unregistered): ${redCount} (${sortedLogs.length > 0 ? ((redCount / sortedLogs.length) * 100).toFixed(1) : 0}%)`);
+    }
+    csvLines.push("");
+    
+    // Data Section
+    csvLines.push("=".repeat(80));
+    csvLines.push("VEHICLE LOGS");
+    csvLines.push("Sorted by Permit Number: Lowest to Highest");
+    csvLines.push("=".repeat(80));
+    csvLines.push("");
+    
+    // Headers
+    csvLines.push(headers.join(","));
+    csvLines.push("-".repeat(80));
+    
+    // Data Rows
+    rows.forEach(row => {
+      csvLines.push(row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","));
+    });
+    
+    csvLines.push("");
+    csvLines.push("-".repeat(80));
+    csvLines.push(`End of Report - ${sortedLogs.length} total entries`);
+    csvLines.push("-".repeat(80));
 
-    const csvContent = [
-      ...summary.map(row => row.join(",")),
-      headers.join(","),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-    ].join("\n");
+    const csvContent = csvLines.join("\n");
 
     // Add BOM for better Excel compatibility
     const BOM = "\uFEFF";
