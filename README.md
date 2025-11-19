@@ -356,36 +356,60 @@ See `server/README.md` for detailed API documentation.
 
 The app automatically deletes uploaded images older than 7 days to prevent storage bloat.
 
-### Setup Automatic Cleanup
+### Setup Automatic Cleanup (Free Options)
 
-**Option 1: Using Render Cron Jobs (Recommended)**
+**Option 1: Using Free External Cron Service (Recommended - 100% Free)**
 
-1. Go to your Render Dashboard
-2. Click **New** → **Cron Job**
-3. Configure:
-   - **Name**: `image-cleanup`
-   - **Schedule**: `0 2 * * *` (runs daily at 2 AM UTC)
-   - **Command**: `curl -X POST https://your-backend-url.onrender.com/api/uploads/cleanup?token=YOUR_SECRET_TOKEN`
-   - Replace `YOUR_SECRET_TOKEN` with a secure random string
-4. Add `CLEANUP_SECRET_TOKEN` to your backend environment variables in Render
-5. Click **Create Cron Job**
-
-**Option 2: Using External Cron Service**
-
-1. Sign up for a free cron service (e.g., cron-job.org, EasyCron)
+1. Sign up for a free account at [cron-job.org](https://cron-job.org) (free tier available)
 2. Create a new cron job:
-   - **URL**: `https://your-backend-url.onrender.com/api/uploads/cleanup?token=YOUR_SECRET_TOKEN`
+   - **Title**: `Park Wise Image Cleanup`
+   - **URL**: `https://parkinglog-backend.onrender.com/api/uploads/cleanup?token=YOUR_SECRET_TOKEN`
    - **Method**: POST
-   - **Schedule**: Daily at 2 AM
-3. Add `CLEANUP_SECRET_TOKEN` to your backend environment variables
+   - **Schedule**: Daily at 2:00 AM (or your preferred time)
+   - **Status**: Active
+3. Generate a secret token (see below) and add it to:
+   - The cron job URL
+   - Your Render environment variables as `CLEANUP_SECRET_TOKEN`
+4. Save the cron job
+
+**Free Cron Services:**
+- **cron-job.org** - Free tier: 2 cron jobs, runs every 5 minutes minimum
+- **EasyCron** - Free tier available
+- **UptimeRobot** - Free tier: 50 monitors (can use HTTP monitor)
+
+**Option 2: Using Supabase pg_cron (Free - Built-in)**
+
+If you prefer to use Supabase's built-in cron (free on all plans):
+
+1. Go to Supabase Dashboard → SQL Editor
+2. Run this SQL to create a scheduled job:
+
+```sql
+-- Create a function that calls your cleanup endpoint
+CREATE OR REPLACE FUNCTION cleanup_old_images()
+RETURNS void AS $$
+BEGIN
+  -- This will be called by pg_cron
+  -- Note: You'll need to use Supabase Edge Functions or HTTP extension
+  -- For simplicity, use Option 1 (external cron) instead
+END;
+$$ LANGUAGE plpgsql;
+
+-- Schedule it to run daily at 2 AM
+SELECT cron.schedule(
+  'cleanup-old-images',
+  '0 2 * * *',
+  $$SELECT cleanup_old_images()$$
+);
+```
 
 **Option 3: Manual Cleanup (Admin Only)**
 
-Admins can manually trigger cleanup by calling:
-```
-POST /api/uploads/cleanup
-```
-(Requires admin authentication)
+Admins can manually trigger cleanup:
+- Via API: `POST /api/uploads/cleanup` (requires admin auth)
+- Or add a button in the admin panel (future enhancement)
+
+**Note:** Render Cron Jobs are typically a paid feature. Use free external services instead.
 
 ### Environment Variable
 
