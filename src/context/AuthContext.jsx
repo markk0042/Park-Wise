@@ -61,6 +61,7 @@ export function AuthProvider({ children }) {
       signInWithOtp: (email) => {
         // Always use the Vercel URL for redirects
         const redirectUrl = 'https://park-wise-two.vercel.app';
+        console.log('🔐 Requesting magic link with redirect:', redirectUrl);
         
         return supabase.auth.signInWithOtp({
           email,
