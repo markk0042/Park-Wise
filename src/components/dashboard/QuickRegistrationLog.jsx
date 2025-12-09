@@ -19,12 +19,12 @@ export default function QuickRegistrationLog() {
 
   const { profile: user } = useAuth();
 
-  // Use EXACT same query setup as VehicleQuickSelect (which works!)
+  // Load vehicles for all approved users (not just admins)
   const { data: vehicles = [], isLoading: vehiclesLoading, error: vehiclesError } = useQuery({
     queryKey: ['vehicles'],
-    queryFn: () => fetchVehicles(), // Same as VehicleQuickSelect
-    enabled: user?.role === 'admin' && user?.status === 'approved', // Same condition as VehicleQuickSelect
-    refetchInterval: 60000, // Same as VehicleQuickSelect
+    queryFn: () => fetchVehicles(),
+    enabled: !!user && user.status === 'approved', // Allow all approved users to load vehicles
+    refetchInterval: 60000,
   });
 
   console.log('QuickRegistrationLog - Vehicles query state:', {
@@ -33,7 +33,7 @@ export default function QuickRegistrationLog() {
     error: vehiclesError,
     userRole: user?.role,
     userStatus: user?.status,
-    enabled: user?.role === 'admin' && user?.status === 'approved'
+    enabled: !!user && user.status === 'approved'
   });
 
   const createLogMutation = useMutation({
