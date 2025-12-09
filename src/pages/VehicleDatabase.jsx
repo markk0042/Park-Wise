@@ -155,18 +155,41 @@ export default function VehicleDatabase() {
     vehicle.parking_type === selectedColor
   );
 
-  // Generate ranges dynamically
+  // Generate ranges dynamically - only show ranges in batches of 100 that have vehicles
   const permitNumbers = colorFilteredVehicles
     .map(v => parseInt(v.permit_number))
     .filter(n => !isNaN(n))
     .sort((a, b) => a - b);
   
-  const maxPermit = permitNumbers.length > 0 ? Math.max(...permitNumbers) : 100;
+  // Determine the starting point based on color
+  // Green permits: start from 1
+  // Yellow permits: start from 602 (00602)
+  const minPermit = permitNumbers.length > 0 ? Math.min(...permitNumbers) : (selectedColor === "Yellow" ? 602 : 1);
+  const maxPermit = permitNumbers.length > 0 ? Math.max(...permitNumbers) : (selectedColor === "Yellow" ? 700 : 100);
+  
+  // Start from the minimum permit, rounded down to nearest 100
+  const startFrom = Math.floor(minPermit / 100) * 100 + 1;
+  const endAt = Math.ceil(maxPermit / 100) * 100;
+  
   const ranges = [];
-  for (let i = 1; i <= maxPermit; i += 100) {
-    const start = String(i).padStart(5, '0');
-    const end = String(Math.min(i + 99, maxPermit)).padStart(5, '0');
-    ranges.push(`${start}-${end}`);
+  for (let i = startFrom; i <= endAt; i += 100) {
+    const rangeStart = i;
+    const rangeEnd = Math.min(i + 99, endAt);
+    
+    // Only include ranges that actually have vehicles in this range
+    const hasVehicles = permitNumbers.some(perm => perm >= rangeStart && perm <= rangeEnd);
+    
+    if (hasVehicles) {
+      const start = String(rangeStart).padStart(5, '0');
+      const end = String(rangeEnd).padStart(5, '0');
+      ranges.push(`${start}-${end}`);
+    }
+  }
+  
+  // If no ranges found, show at least one default range
+  if (ranges.length === 0) {
+    const defaultStart = selectedColor === "Yellow" ? 602 : 1;
+    ranges.push(`${String(defaultStart).padStart(5, '0')}-${String(defaultStart + 99).padStart(5, '0')}`);
   }
 
   // Parse selected range
@@ -568,7 +591,15 @@ export default function VehicleDatabase() {
                 variant={selectedColor === "Yellow" ? "default" : "outline"}
                 onClick={() => {
                   setSelectedColor("Yellow");
-                  setSelectedRange("00001-00100");
+                  // Set to first available range for Yellow (starting from 00602)
+                  const yellowRanges = vehicles
+                    .filter(v => v.parking_type === "Yellow" && v.permit_number)
+                    .map(v => parseInt(v.permit_number))
+                    .filter(n => !isNaN(n));
+                  const firstYellowRange = yellowRanges.length > 0 
+                    ? Math.floor(Math.min(...yellowRanges) / 100) * 100 + 1
+                    : 602;
+                  setSelectedRange(String(firstYellowRange).padStart(5, '0') + '-' + String(firstYellowRange + 99).padStart(5, '0'));
                 }}
                 className={`flex items-center gap-2 ${selectedColor === "Yellow" ? "bg-amber-600 hover:bg-amber-700" : ""}`}
               >
