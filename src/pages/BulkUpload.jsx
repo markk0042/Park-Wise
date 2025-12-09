@@ -5,14 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Download, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { bulkUpsertVehicles } from "@/api";
+import { bulkReplaceVehicles } from "@/api";
 import { autoAssignParkingType } from "@/utils/permitUtils";
 
 export default function BulkUpload() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [uploadedCount, setUploadedCount] = useState(0);
-  const [updatedCount, setUpdatedCount] = useState(0);
   const [insertedCount, setInsertedCount] = useState(0);
   const [errors, setErrors] = useState([]);
   const queryClient = useQueryClient();
@@ -241,14 +240,14 @@ export default function BulkUpload() {
       }
 
       setUploadStatus("saving");
-      const result = await bulkUpsertVehicles(normalizedVehicles);
+      // Use bulk replace to delete all existing vehicles and insert new ones
+      const result = await bulkReplaceVehicles(normalizedVehicles);
       
       return result;
     },
     onSuccess: (data) => {
       setUploadStatus("success");
       setUploadedCount(data.total || 0);
-      setUpdatedCount(data.updated || 0);
       setInsertedCount(data.inserted || 0);
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       setSelectedFile(null);
@@ -314,7 +313,7 @@ export default function BulkUpload() {
             Bulk Vehicle Upload
           </h1>
           <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">
-            Upload or update registrations and permit numbers (GDPR compliant). Existing vehicles with the same registration plate will be updated.
+            Upload a CSV file to replace all vehicles in the database. All existing vehicles will be deleted and replaced with the new list. Permit colors are automatically assigned: 00001-00601 = Green, 00602+ = Yellow, No permit = Red (GDPR compliant).
           </p>
         </div>
 
@@ -414,14 +413,11 @@ export default function BulkUpload() {
           <Alert className="bg-emerald-50 border-emerald-200">
             <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-emerald-600" />
             <AlertDescription className="text-emerald-900 text-sm md:text-base">
-              <strong>Success!</strong> Processed {uploadedCount} vehicles:
+              <strong>Success!</strong> Replaced all vehicles in the database:
               <ul className="mt-2 list-disc list-inside space-y-1">
-                {updatedCount > 0 && (
-                  <li><strong>{updatedCount}</strong> existing vehicles updated</li>
-                )}
-                {insertedCount > 0 && (
-                  <li><strong>{insertedCount}</strong> new vehicles added</li>
-                )}
+                <li>All previous vehicles deleted</li>
+                <li><strong>{insertedCount}</strong> new vehicles added</li>
+                <li>Permit colors automatically assigned (00001-00601 = Green, 00602+ = Yellow, No permit = Red)</li>
               </ul>
             </AlertDescription>
           </Alert>

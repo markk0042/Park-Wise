@@ -45,12 +45,31 @@ export const deleteVehicle = async (id) => {
 };
 
 export const deleteAllVehicles = async () => {
-  const { error } = await supabaseAdmin
+  // Delete all vehicles by selecting all IDs first, then deleting them
+  // This avoids UUID comparison issues
+  const { data: allVehicles, error: fetchError } = await supabaseAdmin
     .from(VEHICLE_TABLE)
-    .delete()
-    .neq('id', '');
-
-  if (error) throw error;
+    .select('id');
+  
+  if (fetchError) throw fetchError;
+  
+  if (!allVehicles || allVehicles.length === 0) {
+    return; // Nothing to delete
+  }
+  
+  // Delete in batches to avoid overwhelming the database
+  const batchSize = 500;
+  for (let i = 0; i < allVehicles.length; i += batchSize) {
+    const batch = allVehicles.slice(i, i + batchSize);
+    const ids = batch.map(v => v.id);
+    
+    const { error } = await supabaseAdmin
+      .from(VEHICLE_TABLE)
+      .delete()
+      .in('id', ids);
+    
+    if (error) throw error;
+  }
 };
 
 export const bulkInsertVehicles = async (vehicles) => {
@@ -152,6 +171,69 @@ export const bulkUpsertVehicles = async (vehicles) => {
     updated: updatedCount,
     inserted: insertedCount,
     total: updatedCount + insertedCount
+  };
+};
+
+/**
+ * Bulk replace vehicles: Delete all existing vehicles, then insert new ones
+ * This ensures a complete replacement of the vehicle database
+ * Auto-assigns parking types based on permit numbers (602+ = Yellow, <602 = Green)
+ */
+export const bulkReplaceVehicles = async (vehicles) => {
+  if (!vehicles || vehicles.length === 0) {
+    // If no vehicles provided, just delete all
+    await deleteAllVehicles();
+    return { deleted: 0, inserted: 0, total: 0 };
+  }
+
+  // First, delete all existing vehicles
+  await deleteAllVehicles();
+
+  // Then insert all new vehicles
+  // Auto-assign parking types based on permit numbers
+  const vehiclesWithAutoTypes = vehicles.map(vehicle => {
+    const permitNum = vehicle.permit_number ? parseInt(String(vehicle.permit_number).trim(), 10) : null;
+    let parkingType = vehicle.parking_type;
+    
+    // If parking_type is not explicitly set or is empty, auto-assign based on permit
+    if (!parkingType || !parkingType.trim()) {
+      if (!vehicle.permit_number || !vehicle.permit_number.trim()) {
+        // No permit = Red (unregistered)
+        parkingType = 'Red';
+      } else if (permitNum && !isNaN(permitNum)) {
+        // Has permit: 602+ = Yellow, <602 = Green
+        parkingType = permitNum >= 602 ? 'Yellow' : 'Green';
+      } else {
+        // Invalid permit number format = Red
+        parkingType = 'Red';
+      }
+    }
+    
+    return {
+      ...vehicle,
+      parking_type: parkingType,
+      is_active: vehicle.is_active !== undefined ? vehicle.is_active : true
+    };
+  });
+
+  // Insert in chunks
+  const chunkSize = 500;
+  let insertedCount = 0;
+  
+  for (let i = 0; i < vehiclesWithAutoTypes.length; i += chunkSize) {
+    const slice = vehiclesWithAutoTypes.slice(i, i + chunkSize);
+    const { error } = await supabaseAdmin
+      .from(VEHICLE_TABLE)
+      .insert(slice);
+    
+    if (error) throw error;
+    insertedCount += slice.length;
+  }
+
+  return {
+    deleted: 'all', // All previous vehicles were deleted
+    inserted: insertedCount,
+    total: insertedCount
   };
 };
 

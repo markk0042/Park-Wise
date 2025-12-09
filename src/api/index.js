@@ -43,6 +43,7 @@ export const deleteVehicle = (id) => httpClient.delete(`/vehicles/${id}`);
 export const deleteAllVehicles = () => httpClient.delete('/vehicles');
 export const bulkInsertVehicles = (vehicles) => httpClient.post('/vehicles/bulk', { vehicles });
 export const bulkUpsertVehicles = (vehicles) => httpClient.post('/vehicles/bulk-upsert', { vehicles });
+export const bulkReplaceVehicles = (vehicles) => httpClient.post('/vehicles/bulk-replace', { vehicles });
 export const updateAllParkingTypes = () => httpClient.post('/vehicles/update-parking-types');
 
 // Parking Logs

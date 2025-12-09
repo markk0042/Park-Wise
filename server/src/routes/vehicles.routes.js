@@ -8,6 +8,7 @@ import {
   removeAllVehicles,
   bulkUploadVehicles,
   bulkUpsertVehiclesController,
+  bulkReplaceVehiclesController,
   updateAllParkingTypes
 } from '../controllers/vehicle.controller.js';
 
@@ -20,6 +21,7 @@ router.delete('/:id', requireAuth, requireAdmin, removeVehicle);
 router.delete('/', requireAuth, requireAdmin, removeAllVehicles);
 router.post('/bulk', requireAuth, requireAdmin, bulkUploadVehicles);
 router.post('/bulk-upsert', requireAuth, requireAdmin, bulkUpsertVehiclesController);
+router.post('/bulk-replace', requireAuth, requireAdmin, bulkReplaceVehiclesController);
 router.post('/update-parking-types', requireAuth, requireAdmin, updateAllParkingTypes);
 
 export default router;

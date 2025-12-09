@@ -41,7 +41,15 @@ export function autoAssignParkingType(vehicleData) {
     return vehicleData;
   }
 
-  // Otherwise, determine from permit number
+  // If no permit number, it's Red (unregistered)
+  if (!vehicleData.permit_number || !vehicleData.permit_number.trim()) {
+    return {
+      ...vehicleData,
+      parking_type: "Red"
+    };
+  }
+
+  // Otherwise, determine from permit number (602+ = Yellow, <602 = Green)
   const autoType = getParkingTypeFromPermit(vehicleData.permit_number, "Green");
   return {
     ...vehicleData,
