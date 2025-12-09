@@ -65,6 +65,97 @@ export const bulkInsertVehicles = async (vehicles) => {
 };
 
 /**
+ * Bulk upsert vehicles: Update existing vehicles by registration_plate, or insert new ones
+ * Returns counts of updated and inserted vehicles
+ */
+export const bulkUpsertVehicles = async (vehicles) => {
+  if (!vehicles || vehicles.length === 0) {
+    return { updated: 0, inserted: 0, total: 0 };
+  }
+
+  let updatedCount = 0;
+  let insertedCount = 0;
+  const chunkSize = 100; // Smaller chunks for upsert to handle queries
+
+  for (let i = 0; i < vehicles.length; i += chunkSize) {
+    const slice = vehicles.slice(i, i + chunkSize);
+    
+    // Get registration plates for this chunk
+    const registrationPlates = slice
+      .map(v => v.registration_plate?.toUpperCase().trim())
+      .filter(Boolean);
+
+    if (registrationPlates.length === 0) continue;
+
+    // Check which vehicles already exist
+    const { data: existingVehicles, error: fetchError } = await supabaseAdmin
+      .from(VEHICLE_TABLE)
+      .select('id, registration_plate')
+      .in('registration_plate', registrationPlates);
+
+    if (fetchError) throw fetchError;
+
+    // Create a map of existing vehicles by registration_plate
+    const existingMap = new Map();
+    if (existingVehicles) {
+      existingVehicles.forEach(v => {
+        existingMap.set(v.registration_plate.toUpperCase().trim(), v.id);
+      });
+    }
+
+    // Separate vehicles into updates and inserts
+    const toUpdate = [];
+    const toInsert = [];
+
+    for (const vehicle of slice) {
+      const regPlate = vehicle.registration_plate?.toUpperCase().trim();
+      if (!regPlate) continue;
+
+      const existingId = existingMap.get(regPlate);
+      if (existingId) {
+        // Vehicle exists, prepare for update
+        toUpdate.push({
+          id: existingId,
+          ...vehicle,
+          updated_at: new Date().toISOString()
+        });
+      } else {
+        // New vehicle, prepare for insert
+        toInsert.push(vehicle);
+      }
+    }
+
+    // Update existing vehicles
+    if (toUpdate.length > 0) {
+      for (const vehicle of toUpdate) {
+        const { id, ...updateData } = vehicle;
+        const { error } = await supabaseAdmin
+          .from(VEHICLE_TABLE)
+          .update(updateData)
+          .eq('id', id);
+        if (error) throw error;
+        updatedCount++;
+      }
+    }
+
+    // Insert new vehicles
+    if (toInsert.length > 0) {
+      const { error } = await supabaseAdmin
+        .from(VEHICLE_TABLE)
+        .insert(toInsert);
+      if (error) throw error;
+      insertedCount += toInsert.length;
+    }
+  }
+
+  return {
+    updated: updatedCount,
+    inserted: insertedCount,
+    total: updatedCount + insertedCount
+  };
+};
+
+/**
  * Helper function to determine parking type from permit number
  * Permits >= 602 are Yellow, otherwise Green
  */

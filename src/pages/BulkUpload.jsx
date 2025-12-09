@@ -5,20 +5,43 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Download, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { bulkInsertVehicles } from "@/api";
+import { bulkUpsertVehicles } from "@/api";
 import { autoAssignParkingType } from "@/utils/permitUtils";
 
 export default function BulkUpload() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [uploadedCount, setUploadedCount] = useState(0);
+  const [updatedCount, setUpdatedCount] = useState(0);
+  const [insertedCount, setInsertedCount] = useState(0);
   const [errors, setErrors] = useState([]);
   const queryClient = useQueryClient();
   const { profile: user } = useAuth();
 
   const parseCsv = (text) => {
-    const rows = text.trim().split(/\r?\n/).filter(Boolean);
-    if (rows.length <= 1) return [];
+    // Remove BOM (Byte Order Mark) if present
+    let cleanText = text;
+    if (text.charCodeAt(0) === 0xFEFF) {
+      cleanText = text.slice(1);
+    }
+    
+    // Split by various line ending formats
+    let rows = cleanText
+      .split(/\r\n|\r|\n/)
+      .map(row => row.trim())
+      .filter(row => row.length > 0); // Remove empty lines
+    
+    // Debug: log first few rows
+    console.log('CSV parsing - First 5 rows:', rows.slice(0, 5));
+    console.log('CSV parsing - Total rows:', rows.length);
+    
+    if (rows.length === 0) {
+      throw new Error("CSV file appears to be empty. Please ensure your file contains data.");
+    }
+    
+    if (rows.length === 1) {
+      throw new Error("CSV file only contains a header row. Please add at least one data row.");
+    }
     
     // Parse header row - handle quoted fields
     const parseRow = (row) => {
@@ -42,29 +65,87 @@ export default function BulkUpload() {
     
     const headers = parseRow(rows[0]).map((h) => h.replace(/^"|"$/g, '').trim().toLowerCase());
     
+    console.log('CSV parsing - Headers found:', headers);
+    
+    if (headers.length === 0) {
+      throw new Error("Could not parse CSV headers. Please ensure your CSV has a header row.");
+    }
+    
     // Normalize header names (handle variations)
     const normalizedHeaders = headers.map(h => {
-      const normalized = h.replace(/[_\s-]/g, '_').toLowerCase();
-      if (normalized.includes('registration') || normalized.includes('plate') || normalized.includes('reg')) {
+      // Remove periods and normalize
+      const cleaned = h.replace(/\./g, '').replace(/[_\s-]/g, '_').toLowerCase();
+      // Handle "Vehicle Reg", "Registration", "Reg Plate", etc.
+      if (cleaned.includes('registration') || cleaned.includes('plate') || cleaned.includes('reg') || cleaned === 'vehicle_reg') {
         return 'registration_plate';
       }
-      if (normalized.includes('permit')) {
+      // Handle "Vehicle Permit no.", "Permit Number", "Permit", etc.
+      if (cleaned.includes('permit') || cleaned.includes('permit_no') || cleaned.includes('permitnumber')) {
         return 'permit_number';
       }
-      if (normalized.includes('parking') || normalized.includes('type') || normalized.includes('color')) {
+      if (cleaned.includes('parking') || cleaned.includes('type') || cleaned.includes('color')) {
         return 'parking_type';
       }
-      return normalized;
+      return cleaned;
     });
     
-    return rows.slice(1).map((row) => {
-      const values = parseRow(row).map((value) => value.replace(/^"|"$/g, '').trim());
-      const record = {};
-      normalizedHeaders.forEach((header, index) => {
-        record[header] = values[index] ?? "";
+    console.log('CSV parsing - Normalized headers:', normalizedHeaders);
+    
+    const dataRows = rows.slice(1)
+      .map((row, rowIndex) => {
+        const values = parseRow(row).map((value) => {
+          // Clean up values: remove quotes, trim, and handle leading slashes/spaces
+          let cleaned = value.replace(/^"|"$/g, '').trim();
+          // Handle cases like " /161-D-40014" -> "161-D-40014"
+          cleaned = cleaned.replace(/^[/\s]+/, '').trim();
+          return cleaned;
+        });
+        const record = {};
+        normalizedHeaders.forEach((header, index) => {
+          record[header] = values[index] ?? "";
+        });
+        
+        // Debug first few rows
+        if (rowIndex < 3) {
+          console.log(`CSV parsing - Row ${rowIndex + 1}:`, {
+            raw: row,
+            values: values,
+            record: record
+          });
+        }
+        
+        return record;
+      })
+      .filter(record => {
+        // Filter out rows with no registration plate (required field)
+        const hasRegistration = record.registration_plate && record.registration_plate.trim().length > 0;
+        // Also filter out completely empty rows
+        const hasAnyData = Object.values(record).some(val => val && val.trim().length > 0);
+        
+        if (!hasRegistration && hasAnyData) {
+          console.log('CSV parsing - Filtered out row (no registration):', record);
+        }
+        
+        return hasRegistration && hasAnyData;
       });
-      return record;
-    });
+    
+    console.log('CSV parsing - Data rows after filtering:', dataRows.length);
+    console.log('CSV parsing - First 3 data rows:', dataRows.slice(0, 3));
+    
+    if (dataRows.length === 0 && rows.length > 1) {
+      // Show sample of what was parsed to help debug
+      const sampleRecords = rows.slice(1, 4).map((row, idx) => {
+        const values = parseRow(row).map(v => v.trim());
+        const record = {};
+        normalizedHeaders.forEach((header, index) => {
+          record[header] = values[index] ?? "";
+        });
+        return { row: idx + 1, raw: row.substring(0, 50), parsed: record };
+      });
+      console.log('CSV parsing - Sample of parsed records (before filtering):', sampleRecords);
+    }
+    
+    return dataRows;
   };
 
   const uploadMutation = useMutation({
@@ -72,15 +153,53 @@ export default function BulkUpload() {
       setUploadStatus("uploading");
       setErrors([]);
 
-      if (!file.name.endsWith('.csv')) {
-        throw new Error("Only CSV files are supported for bulk upload.");
+      // Check file extension
+      const fileName = file.name.toLowerCase();
+      if (!fileName.endsWith('.csv') && !fileName.endsWith('.txt')) {
+        throw new Error("Only CSV files are supported. Please save your Excel file as CSV (File → Save As → CSV).");
       }
 
+      // Read file with UTF-8 encoding
+      console.log('File upload started:', file.name, 'Size:', file.size, 'bytes');
       const text = await file.text();
-      const parsedRows = parseCsv(text);
+      console.log('File read successfully. Text length:', text.length);
+      console.log('First 500 characters of file:', text.substring(0, 500));
+      
+      if (!text || text.trim().length === 0) {
+        console.error('File is empty or contains no text');
+        throw new Error("The file appears to be empty. Please check your CSV file and try again.");
+      }
+
+      let parsedRows;
+      try {
+        console.log('Starting CSV parsing...');
+        parsedRows = parseCsv(text);
+        console.log('CSV parsing completed. Rows found:', parsedRows.length);
+      } catch (parseError) {
+        console.error('CSV parsing error:', parseError);
+        console.error('Error stack:', parseError.stack);
+        throw new Error(parseError.message || "Failed to parse CSV file. Please check the format and try again.");
+      }
 
       if (parsedRows.length === 0) {
-        throw new Error("No rows detected. Ensure the CSV includes a header row and at least one vehicle.");
+        // Get more details about what went wrong
+        const textPreview = text.substring(0, 200);
+        const lineCount = text.split(/\r\n|\r|\n/).filter(l => l.trim().length > 0).length;
+        const firstLine = text.split(/\r\n|\r|\n/)[0] || '';
+        
+        console.error('No rows detected. Debug info:', {
+          fileSize: text.length,
+          lineCount: lineCount,
+          firstLine: firstLine,
+          textPreview: textPreview
+        });
+        
+        throw new Error(
+          `No data rows detected. ` +
+          `File has ${lineCount} lines. ` +
+          `First line: "${firstLine.substring(0, 50)}". ` +
+          `Please ensure your CSV has a header row (e.g., "Vehicle Reg,Vehicle Permit no.") and at least one data row.`
+        );
       }
 
       setUploadStatus("processing");
@@ -88,7 +207,18 @@ export default function BulkUpload() {
       // Validate that we have registration_plate column
       if (parsedRows.length > 0 && !parsedRows[0].registration_plate) {
         const foundColumns = Object.keys(parsedRows[0]).join(', ');
-        throw new Error(`Missing required column 'registration_plate'. Found columns: ${foundColumns || 'none'}. Please ensure your CSV has a header row with 'registration_plate' (or variations like 'Registration Plate', 'Reg Plate', etc.).`);
+        const firstRowData = JSON.stringify(parsedRows[0]);
+        console.error('Missing registration_plate column. Found:', {
+          columns: foundColumns,
+          firstRow: firstRowData,
+          normalizedHeaders: normalizedHeaders
+        });
+        throw new Error(
+          `Missing required column 'registration_plate'. ` +
+          `Found columns: ${foundColumns || 'none'}. ` +
+          `First row data: ${firstRowData}. ` +
+          `Please ensure your CSV has a header row with 'Vehicle Reg' or 'registration_plate'.`
+        );
       }
       
       const normalizedVehicles = parsedRows
@@ -111,17 +241,22 @@ export default function BulkUpload() {
       }
 
       setUploadStatus("saving");
-      await bulkInsertVehicles(normalizedVehicles);
+      const result = await bulkUpsertVehicles(normalizedVehicles);
       
-      return { count: normalizedVehicles.length };
+      return result;
     },
     onSuccess: (data) => {
       setUploadStatus("success");
-      setUploadedCount(data.count);
+      setUploadedCount(data.total || 0);
+      setUpdatedCount(data.updated || 0);
+      setInsertedCount(data.inserted || 0);
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       setSelectedFile(null);
     },
     onError: (error) => {
+      console.error('Upload mutation error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       setUploadStatus("error");
       setErrors([error.message]);
     },
@@ -179,7 +314,7 @@ export default function BulkUpload() {
             Bulk Vehicle Upload
           </h1>
           <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">
-            Upload registrations and permit numbers only (GDPR compliant)
+            Upload or update registrations and permit numbers (GDPR compliant). Existing vehicles with the same registration plate will be updated.
           </p>
         </div>
 
@@ -279,7 +414,15 @@ export default function BulkUpload() {
           <Alert className="bg-emerald-50 border-emerald-200">
             <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-emerald-600" />
             <AlertDescription className="text-emerald-900 text-sm md:text-base">
-              <strong>Success!</strong> {uploadedCount} vehicles have been added to the database.
+              <strong>Success!</strong> Processed {uploadedCount} vehicles:
+              <ul className="mt-2 list-disc list-inside space-y-1">
+                {updatedCount > 0 && (
+                  <li><strong>{updatedCount}</strong> existing vehicles updated</li>
+                )}
+                {insertedCount > 0 && (
+                  <li><strong>{insertedCount}</strong> new vehicles added</li>
+                )}
+              </ul>
             </AlertDescription>
           </Alert>
         )}

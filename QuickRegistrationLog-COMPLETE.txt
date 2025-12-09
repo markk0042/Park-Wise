@@ -4,41 +4,50 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Zap, CheckCircle, AlertCircle, Tag, AlertTriangle } from "lucide-react";
+import { Zap, CheckCircle, AlertCircle, Tag } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
 import { createParkingLog, fetchVehicles } from "@/api";
 
-export default function QuickRegistrationLogWithSection({ section }) {
+export default function QuickRegistrationLog() {
   const [registration, setRegistration] = useState("");
   const [matchedVehicle, setMatchedVehicle] = useState(null);
   const [showUnregistered, setShowUnregistered] = useState(false);
-  const [isViolation, setIsViolation] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const queryClient = useQueryClient();
 
   const { profile: user } = useAuth();
 
-  const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
+  // Load vehicles for all approved users (not just admins)
+  const { data: vehicles = [], isLoading: vehiclesLoading, error: vehiclesError } = useQuery({
     queryKey: ['vehicles'],
-    queryFn: () => fetchVehicles("permit_number"),
-    enabled: user?.status === 'approved', // Allow all approved users
+    queryFn: () => fetchVehicles(),
+    enabled: !!user && user.status === 'approved', // Allow all approved users to load vehicles
     refetchInterval: 60000,
-    retry: false,
+  });
+
+  console.log('QuickRegistrationLog - Vehicles query state:', {
+    vehiclesCount: vehicles.length,
+    isLoading: vehiclesLoading,
+    error: vehiclesError,
+    userRole: user?.role,
+    userStatus: user?.status,
+    enabled: !!user && user.status === 'approved'
   });
 
   const createLogMutation = useMutation({
     mutationFn: (logData) => createParkingLog(logData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['parkingLogs'] });
       const regPlate = matchedVehicle?.registration_plate || registration.toUpperCase().trim();
       setSuccessMessage(`✓ ${regPlate} logged successfully!`);
       setRegistration("");
       setMatchedVehicle(null);
       setShowUnregistered(false);
-      setIsViolation(false);
-      setTimeout(() => setSuccessMessage(""), 3000);
+      setTimeout(() => {
+        setSuccessMessage("");
+        queryClient.invalidateQueries({ queryKey: ['parkingLogs'] });
+      }, 1500);
     },
     onError: (error) => {
       console.error("Failed to create log:", error);
@@ -48,37 +57,61 @@ export default function QuickRegistrationLogWithSection({ section }) {
   });
 
   const handleSearch = () => {
+    console.log('=== handleSearch called ===');
+    console.log('Registration input:', registration);
+    
     setErrorMessage("");
     setSuccessMessage("");
     setShowUnregistered(false);
-    setIsViolation(false);
     
-    const searchTerm = registration.toUpperCase().trim();
+    const searchTerm = registration.trim();
+    console.log('Search term after trim:', searchTerm);
+    
     if (!searchTerm) {
+      console.log('No search term, returning');
       setErrorMessage("Please enter a registration plate");
       return;
     }
 
-    console.log('Searching for:', searchTerm);
-    console.log('Vehicles loaded:', vehicles.length);
-    console.log('Sample vehicles:', vehicles.slice(0, 3).map(v => v.registration_plate));
+    // Check if vehicles are still loading
+    if (vehiclesLoading) {
+      setErrorMessage("Loading vehicles database...");
+      return;
+    }
 
-    // First, try exact registration match
+    if (vehicles.length === 0) {
+      setErrorMessage("Vehicles database is empty or not loaded. Please refresh the page.");
+      return;
+    }
+
+    const searchLower = searchTerm.toLowerCase();
+    console.log('Searching for:', searchTerm, '(lowercase:', searchLower + ')');
+    console.log('Vehicles loaded:', vehicles.length);
+    console.log('Sample vehicles:', vehicles.slice(0, 5).map(v => ({
+      reg: v.registration_plate,
+      permit: v.permit_number,
+      active: v.is_active
+    })));
+
+    // First, try exact registration match (case insensitive)
     let vehicle = vehicles.find(v => 
-      v.registration_plate.toUpperCase() === searchTerm && v.is_active
+      v.registration_plate?.toLowerCase() === searchLower && v.is_active
     );
 
     console.log('Exact match found:', vehicle ? vehicle.registration_plate : 'none');
 
     // If no exact match, check for registrations with "/" separator (multiple registrations)
+    // This handles cases like "191-MH-2848" matching "191-MH-2848 / 202-D-19949"
     if (!vehicle) {
+      const searchUpper = searchTerm.toUpperCase().trim();
+      
       vehicle = vehicles.find(v => {
         if (!v.is_active) return false;
-        const regUpper = v.registration_plate.toUpperCase();
+        const regUpper = v.registration_plate?.toUpperCase() || '';
         
         // First, try substring match (like VehicleQuickSelect does)
         // This handles cases like "191-MH-2848" matching "191-MH-2848 / 202-D-19949"
-        if (regUpper.includes(searchTerm)) {
+        if (regUpper.includes(searchUpper)) {
           console.log('Substring match found:', v.registration_plate);
           return true;
         }
@@ -86,17 +119,21 @@ export default function QuickRegistrationLogWithSection({ section }) {
         // Also check if registration contains "/" and search term matches any part exactly
         // Split by "/" and also handle spaces around "/"
         // Example: "191-MH-2848 / 202-D-19949" or "191-MH-2848/202-D-19949"
-        const regParts = regUpper
-          .split(/\s*\/\s*/)  // Split by "/" with optional spaces
-          .map(p => p.trim())
-          .filter(p => p.length > 0);
-        
-        // Check if any part exactly matches the search term
-        const partMatch = regParts.some(part => part === searchTerm);
-        if (partMatch) {
-          console.log('Part match found:', v.registration_plate, 'parts:', regParts);
+        if (regUpper.includes('/')) {
+          const regParts = regUpper
+            .split(/\s*\/\s*/)  // Split by "/" with optional spaces
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+          
+          // Check if any part exactly matches the search term
+          const partMatch = regParts.some(part => part === searchUpper);
+          if (partMatch) {
+            console.log('Part match found:', v.registration_plate, 'parts:', regParts);
+          }
+          return partMatch;
         }
-        return partMatch;
+        
+        return false;
       });
       
       // If found a vehicle with multiple registrations, use it but update the registration
@@ -104,44 +141,32 @@ export default function QuickRegistrationLogWithSection({ section }) {
         console.log('Using vehicle with multiple registrations:', vehicle.registration_plate);
         vehicle = {
           ...vehicle,
-          registration_plate: searchTerm // Use the searched registration
+          registration_plate: searchTerm.toUpperCase() // Use the searched registration
         };
       }
     }
 
-    // If still no match, check if there are vehicles with the same permit number
-    // This handles cases where multiple registrations share the same permit
+    // If still no match, try permit number search
     if (!vehicle) {
-      // Find any vehicle with the searched registration (might be inactive or not found)
-      const searchedVehicle = vehicles.find(v => 
-        v.registration_plate.toUpperCase() === searchTerm ||
-        v.registration_plate.toUpperCase().includes(searchTerm)
-      );
+      const matchingVehicles = vehicles
+        .filter(v => v.is_active)
+        .filter(v => {
+          return v.permit_number?.toLowerCase().includes(searchLower);
+        });
       
-      // If we found a vehicle with a permit number,
-      // try to find an active vehicle with the same permit number
-      if (searchedVehicle && searchedVehicle.permit_number) {
-        const vehicleWithSamePermit = vehicles.find(v => 
-          v.is_active &&
-          v.permit_number === searchedVehicle.permit_number &&
-          v.registration_plate.toUpperCase() !== searchTerm
-        );
-        
-        // If found a vehicle with same permit, use it but keep the searched registration
-        if (vehicleWithSamePermit) {
-          vehicle = {
-            ...vehicleWithSamePermit,
-            registration_plate: searchTerm // Use the searched registration
-          };
-        }
+      if (matchingVehicles.length > 0) {
+        vehicle = {
+          ...matchingVehicles[0],
+          registration_plate: searchTerm.toUpperCase()
+        };
       }
     }
 
-    // If still no match, check if search term matches a permit number format
+    // If still no match, check if search term matches a permit number exactly
     if (!vehicle) {
       const permitMatch = vehicles.find(v => 
         v.permit_number && 
-        v.permit_number.trim().toUpperCase() === searchTerm.trim() &&
+        v.permit_number.trim().toUpperCase() === searchTerm.trim().toUpperCase() &&
         v.is_active
       );
       
@@ -151,27 +176,14 @@ export default function QuickRegistrationLogWithSection({ section }) {
     }
 
     if (vehicle) {
+      console.log('Vehicle found! Setting matched vehicle:', vehicle);
       setMatchedVehicle(vehicle);
       setShowUnregistered(false);
-      
-      // Check for violations
-      let violation = false;
-      if (section === "Green") {
-        // Yellow or Red in Green zone is a violation
-        if (vehicle.parking_type === "Yellow" || vehicle.parking_type === "Red") {
-          violation = true;
-        }
-      } else if (section === "Yellow") {
-        // Red in Yellow zone is a violation
-        if (vehicle.parking_type === "Red") {
-          violation = true;
-        }
-      }
-      setIsViolation(violation);
     } else {
+      console.log('No vehicle found for:', searchTerm);
+      console.log('All vehicles checked. Total active vehicles:', vehicles.filter(v => v.is_active).length);
       setMatchedVehicle(null);
       setShowUnregistered(true);
-      setIsViolation(true); // Unregistered is always a violation
     }
   };
 
@@ -184,39 +196,25 @@ export default function QuickRegistrationLogWithSection({ section }) {
       return;
     }
 
-    let logData;
     if (matchedVehicle) {
-      const notesPrefix = matchedVehicle.permit_number ? `Permit: ${matchedVehicle.permit_number}` : "No permit";
-      let violationNote = "";
-      
-      if (isViolation) {
-        if (matchedVehicle.parking_type === "Yellow" && section === "Green") {
-          violationNote = " - VIOLATION: Yellow permit in Green Car Park";
-        } else if (matchedVehicle.parking_type === "Red" && section === "Green") {
-          violationNote = " - VIOLATION: No permit in Green Car Park (Non-compliant)";
-        } else if (matchedVehicle.parking_type === "Red" && section === "Yellow") {
-          violationNote = " - VIOLATION: No permit in Yellow Car Park (Non-compliant)";
-        }
-      }
-      
-      logData = {
+      const logData = {
         registration_plate: matchedVehicle.registration_plate,
         parking_type: matchedVehicle.parking_type,
-        notes: notesPrefix + violationNote,
+        notes: matchedVehicle.permit_number ? `Permit: ${matchedVehicle.permit_number}` : "No permit",
         log_date: format(new Date(), "yyyy-MM-dd"),
         log_time: format(new Date(), "HH:mm")
       };
+      createLogMutation.mutate(logData);
     } else if (showUnregistered) {
-      logData = {
+      const logData = {
         registration_plate: registration.toUpperCase().trim(),
         parking_type: "Red",
-        notes: `No permit - Unregistered vehicle - VIOLATION: Unregistered in ${section} Car Park (Non-compliant)`,
+        notes: "No permit - Unregistered vehicle",
         log_date: format(new Date(), "yyyy-MM-dd"),
         log_time: format(new Date(), "HH:mm")
       };
+      createLogMutation.mutate(logData);
     }
-    
-    createLogMutation.mutate(logData);
   };
 
   const parkingColors = {
@@ -225,13 +223,11 @@ export default function QuickRegistrationLogWithSection({ section }) {
     Red: "bg-red-100 text-red-800"
   };
 
-  const sectionColor = section === "Green" ? "emerald" : "amber";
-
   return (
-    <Card className={`shadow-lg border-2 border-${sectionColor}-200`}>
-      <CardHeader className={`pb-3 bg-${sectionColor}-50`}>
+    <Card className="shadow-lg border-2 border-indigo-200">
+      <CardHeader className="pb-3 bg-indigo-50">
         <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <Zap className={`w-5 h-5 text-${sectionColor}-600`} />
+          <Zap className="w-5 h-5 text-indigo-600" />
           Vehicle Registration Log
         </CardTitle>
         <p className="text-sm text-slate-600 mt-1">
@@ -259,6 +255,31 @@ export default function QuickRegistrationLogWithSection({ section }) {
               Loading vehicles database...
             </div>
           )}
+          {!vehiclesLoading && vehicles.length === 0 && (
+            <div className="text-sm text-red-500 text-center py-2 border border-red-200 bg-red-50 rounded p-2">
+              ⚠️ Vehicles database not loaded ({vehicles.length} vehicles). Please refresh the page.
+            </div>
+          )}
+          {!vehiclesLoading && vehicles.length > 0 && (
+            <div className="text-xs text-slate-500 text-center py-1">
+              ✓ {vehicles.length} vehicles loaded - ready to search
+            </div>
+          )}
+          {!vehiclesLoading && vehicles.length > 0 && (
+            <>
+              <div className="text-xs text-slate-500 text-center py-1">
+                ✓ {vehicles.length} vehicles loaded - ready to search
+              </div>
+              <div className="text-xs text-blue-600 text-center py-1 bg-blue-50 border border-blue-200 rounded p-2">
+                DEBUG: Sample vehicles: {vehicles.slice(0, 3).map(v => v.registration_plate).join(', ')}
+                {vehicles.some(v => v.registration_plate?.toLowerCase().includes('191-mh-2848')) && (
+                  <div className="mt-1 text-green-600 font-bold">
+                    ✓ Vehicle "191-MH-2848" found in database!
+                  </div>
+                )}
+              </div>
+            </>
+          )}
           
           <div className="flex gap-2">
             <Input
@@ -269,7 +290,10 @@ export default function QuickRegistrationLogWithSection({ section }) {
               className="font-mono text-base uppercase"
             />
             <Button 
-              onClick={handleSearch}
+              onClick={() => {
+                alert('Search button clicked! Searching for: ' + registration);
+                handleSearch();
+              }}
               variant="outline"
               className="shrink-0"
             >
@@ -277,18 +301,9 @@ export default function QuickRegistrationLogWithSection({ section }) {
             </Button>
           </div>
 
-          {isViolation && (matchedVehicle || showUnregistered) && (
-            <div className="p-3 bg-red-100 border-2 border-red-400 rounded-lg flex items-center gap-2 text-red-900">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <span className="font-bold text-sm">
-                WARNING: Non-compliant parking detected!
-              </span>
-            </div>
-          )}
-
           {matchedVehicle && (
             <div className="space-y-3">
-              <div className={`p-4 border-2 rounded-lg bg-white space-y-3 ${isViolation ? 'border-red-400' : `border-${sectionColor}-200`}`}>
+              <div className="p-4 border-2 border-indigo-200 rounded-lg bg-white space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="space-y-2 flex-1">
                     <div>
@@ -319,13 +334,9 @@ export default function QuickRegistrationLogWithSection({ section }) {
               <Button
                 onClick={handleLog}
                 disabled={createLogMutation.isPending}
-                className={`w-full font-semibold py-6 text-base ${
-                  isViolation 
-                    ? 'bg-red-600 hover:bg-red-700' 
-                    : `bg-${sectionColor}-600 hover:bg-${sectionColor}-700`
-                } text-white`}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-6 text-base"
               >
-                {createLogMutation.isPending ? "Logging..." : isViolation ? "Log Violation" : `Log ${matchedVehicle.parking_type} Permit`}
+                {createLogMutation.isPending ? "Logging..." : `Log ${matchedVehicle.parking_type} Permit Now`}
               </Button>
             </div>
           )}
@@ -367,7 +378,7 @@ export default function QuickRegistrationLogWithSection({ section }) {
                 disabled={createLogMutation.isPending}
                 className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-6 text-base"
               >
-                {createLogMutation.isPending ? "Logging..." : "Log Violation - Unregistered Vehicle"}
+                {createLogMutation.isPending ? "Logging..." : "Log Unregistered Vehicle"}
               </Button>
             </div>
           )}
@@ -382,3 +393,4 @@ export default function QuickRegistrationLogWithSection({ section }) {
     </Card>
   );
 }
+

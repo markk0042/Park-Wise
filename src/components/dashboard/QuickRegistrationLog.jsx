@@ -19,13 +19,21 @@ export default function QuickRegistrationLog() {
 
   const { profile: user } = useAuth();
 
-  const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
+  // Load vehicles for all approved users (not just admins)
+  const { data: vehicles = [], isLoading: vehiclesLoading, error: vehiclesError } = useQuery({
     queryKey: ['vehicles'],
-    queryFn: () => fetchVehicles("permit_number"),
-    enabled: user?.role === 'admin' && user?.status === 'approved',
-    staleTime: 300000,
-    refetchOnWindowFocus: false,
-    retry: false,
+    queryFn: () => fetchVehicles(),
+    enabled: !!user && user.status === 'approved', // Allow all approved users to load vehicles
+    refetchInterval: 60000,
+  });
+
+  console.log('QuickRegistrationLog - Vehicles query state:', {
+    vehiclesCount: vehicles.length,
+    isLoading: vehiclesLoading,
+    error: vehiclesError,
+    userRole: user?.role,
+    userStatus: user?.status,
+    enabled: !!user && user.status === 'approved'
   });
 
   const createLogMutation = useMutation({
@@ -49,24 +57,131 @@ export default function QuickRegistrationLog() {
   });
 
   const handleSearch = () => {
+    console.log('=== handleSearch called ===');
+    console.log('Registration input:', registration);
+    
     setErrorMessage("");
     setSuccessMessage("");
     setShowUnregistered(false);
     
-    const searchTerm = registration.toUpperCase().trim();
+    const searchTerm = registration.trim();
+    console.log('Search term after trim:', searchTerm);
+    
     if (!searchTerm) {
+      console.log('No search term, returning');
       setErrorMessage("Please enter a registration plate");
       return;
     }
 
-    const vehicle = vehicles.find(v => 
-      v.registration_plate.toUpperCase() === searchTerm && v.is_active
+    // Check if vehicles are still loading
+    if (vehiclesLoading) {
+      setErrorMessage("Loading vehicles database...");
+      return;
+    }
+
+    if (vehicles.length === 0) {
+      setErrorMessage("Vehicles database is empty or not loaded. Please refresh the page.");
+      return;
+    }
+
+    const searchLower = searchTerm.toLowerCase();
+    console.log('Searching for:', searchTerm, '(lowercase:', searchLower + ')');
+    console.log('Vehicles loaded:', vehicles.length);
+    console.log('Sample vehicles:', vehicles.slice(0, 5).map(v => ({
+      reg: v.registration_plate,
+      permit: v.permit_number,
+      active: v.is_active
+    })));
+
+    // First, try exact registration match (case insensitive)
+    let vehicle = vehicles.find(v => 
+      v.registration_plate?.toLowerCase() === searchLower && v.is_active
     );
 
+    console.log('Exact match found:', vehicle ? vehicle.registration_plate : 'none');
+
+    // If no exact match, check for registrations with "/" separator (multiple registrations)
+    // This handles cases like "191-MH-2848" matching "191-MH-2848 / 202-D-19949"
+    if (!vehicle) {
+      const searchUpper = searchTerm.toUpperCase().trim();
+      
+      vehicle = vehicles.find(v => {
+        if (!v.is_active) return false;
+        const regUpper = v.registration_plate?.toUpperCase() || '';
+        
+        // First, try substring match (like VehicleQuickSelect does)
+        // This handles cases like "191-MH-2848" matching "191-MH-2848 / 202-D-19949"
+        if (regUpper.includes(searchUpper)) {
+          console.log('Substring match found:', v.registration_plate);
+          return true;
+        }
+        
+        // Also check if registration contains "/" and search term matches any part exactly
+        // Split by "/" and also handle spaces around "/"
+        // Example: "191-MH-2848 / 202-D-19949" or "191-MH-2848/202-D-19949"
+        if (regUpper.includes('/')) {
+          const regParts = regUpper
+            .split(/\s*\/\s*/)  // Split by "/" with optional spaces
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+          
+          // Check if any part exactly matches the search term
+          const partMatch = regParts.some(part => part === searchUpper);
+          if (partMatch) {
+            console.log('Part match found:', v.registration_plate, 'parts:', regParts);
+          }
+          return partMatch;
+        }
+        
+        return false;
+      });
+      
+      // If found a vehicle with multiple registrations, use it but update the registration
+      if (vehicle) {
+        console.log('Using vehicle with multiple registrations:', vehicle.registration_plate);
+        vehicle = {
+          ...vehicle,
+          registration_plate: searchTerm.toUpperCase() // Use the searched registration
+        };
+      }
+    }
+
+    // If still no match, try permit number search
+    if (!vehicle) {
+      const matchingVehicles = vehicles
+        .filter(v => v.is_active)
+        .filter(v => {
+          return v.permit_number?.toLowerCase().includes(searchLower);
+        });
+      
+      if (matchingVehicles.length > 0) {
+        vehicle = {
+          ...matchingVehicles[0],
+          registration_plate: searchTerm.toUpperCase()
+        };
+      }
+    }
+
+    // If still no match, check if search term matches a permit number exactly
+    if (!vehicle) {
+      const permitMatch = vehicles.find(v => 
+        v.permit_number && 
+        v.permit_number.trim().toUpperCase() === searchTerm.trim().toUpperCase() &&
+        v.is_active
+      );
+      
+      if (permitMatch) {
+        vehicle = permitMatch;
+      }
+    }
+
     if (vehicle) {
+      console.log('Vehicle found! Setting matched vehicle:', vehicle);
       setMatchedVehicle(vehicle);
       setShowUnregistered(false);
     } else {
+      console.log('No vehicle found for:', searchTerm);
+      console.log('All vehicles checked. Total active vehicles:', vehicles.filter(v => v.is_active).length);
       setMatchedVehicle(null);
       setShowUnregistered(true);
     }
@@ -140,6 +255,31 @@ export default function QuickRegistrationLog() {
               Loading vehicles database...
             </div>
           )}
+          {!vehiclesLoading && vehicles.length === 0 && (
+            <div className="text-sm text-red-500 text-center py-2 border border-red-200 bg-red-50 rounded p-2">
+              ⚠️ Vehicles database not loaded ({vehicles.length} vehicles). Please refresh the page.
+            </div>
+          )}
+          {!vehiclesLoading && vehicles.length > 0 && (
+            <div className="text-xs text-slate-500 text-center py-1">
+              ✓ {vehicles.length} vehicles loaded - ready to search
+            </div>
+          )}
+          {!vehiclesLoading && vehicles.length > 0 && (
+            <>
+              <div className="text-xs text-slate-500 text-center py-1">
+                ✓ {vehicles.length} vehicles loaded - ready to search
+              </div>
+              <div className="text-xs text-blue-600 text-center py-1 bg-blue-50 border border-blue-200 rounded p-2">
+                DEBUG: Sample vehicles: {vehicles.slice(0, 3).map(v => v.registration_plate).join(', ')}
+                {vehicles.some(v => v.registration_plate?.toLowerCase().includes('191-mh-2848')) && (
+                  <div className="mt-1 text-green-600 font-bold">
+                    ✓ Vehicle "191-MH-2848" found in database!
+                  </div>
+                )}
+              </div>
+            </>
+          )}
           
           <div className="flex gap-2">
             <Input
@@ -150,7 +290,10 @@ export default function QuickRegistrationLog() {
               className="font-mono text-base uppercase"
             />
             <Button 
-              onClick={handleSearch}
+              onClick={() => {
+                alert('Search button clicked! Searching for: ' + registration);
+                handleSearch();
+              }}
               variant="outline"
               className="shrink-0"
             >
