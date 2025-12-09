@@ -100,63 +100,73 @@ export default function QuickRegistrationLog() {
 
     console.log('Exact match found:', vehicle ? vehicle.registration_plate : 'none');
 
-    // If no exact match, use the EXACT same logic as VehicleQuickSelect (which works!)
-    // Copy the exact filter logic from VehicleQuickSelect lines 26-36
+    // If no exact match, check for registrations with "/" separator (multiple registrations)
+    // This handles cases like "191-MH-2848" matching "191-MH-2848 / 202-D-19949"
     if (!vehicle) {
-      const search = searchLower; // Same variable name as VehicleQuickSelect
+      const searchUpper = searchTerm.toUpperCase().trim();
       
-      // Exact same filter chain as VehicleQuickSelect
-      const matchingVehicles = vehicles
-        .filter(v => v.is_active)
-        .filter(v => {
-          return (
-            (v.registration_plate?.toLowerCase().includes(search)) ||
-            (v.permit_number?.toLowerCase().includes(search))
-          );
-        });
+      vehicle = vehicles.find(v => {
+        if (!v.is_active) return false;
+        const regUpper = v.registration_plate?.toUpperCase() || '';
+        
+        // First, try substring match (like VehicleQuickSelect does)
+        // This handles cases like "191-MH-2848" matching "191-MH-2848 / 202-D-19949"
+        if (regUpper.includes(searchUpper)) {
+          console.log('Substring match found:', v.registration_plate);
+          return true;
+        }
+        
+        // Also check if registration contains "/" and search term matches any part exactly
+        // Split by "/" and also handle spaces around "/"
+        // Example: "191-MH-2848 / 202-D-19949" or "191-MH-2848/202-D-19949"
+        if (regUpper.includes('/')) {
+          const regParts = regUpper
+            .split(/\s*\/\s*/)  // Split by "/" with optional spaces
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+          
+          // Check if any part exactly matches the search term
+          const partMatch = regParts.some(part => part === searchUpper);
+          if (partMatch) {
+            console.log('Part match found:', v.registration_plate, 'parts:', regParts);
+          }
+          return partMatch;
+        }
+        
+        return false;
+      });
       
-      if (matchingVehicles.length > 0) {
-        // Use the first match (same as VehicleQuickSelect)
+      // If found a vehicle with multiple registrations, use it but update the registration
+      if (vehicle) {
+        console.log('Using vehicle with multiple registrations:', vehicle.registration_plate);
         vehicle = {
-          ...matchingVehicles[0],
+          ...vehicle,
           registration_plate: searchTerm.toUpperCase() // Use the searched registration
         };
       }
     }
 
-    // If still no match, check if there are vehicles with the same permit number
-    // This handles cases where multiple registrations share the same permit
+    // If still no match, try permit number search
     if (!vehicle) {
-      // Find any vehicle with the searched registration (might be inactive or not found)
-      const searchedVehicle = vehicles.find(v => 
-        v.registration_plate.toUpperCase() === searchTerm ||
-        v.registration_plate.toUpperCase().includes(searchTerm)
-      );
+      const matchingVehicles = vehicles
+        .filter(v => v.is_active)
+        .filter(v => {
+          return v.permit_number?.toLowerCase().includes(searchLower);
+        });
       
-      // If we found a vehicle with a permit number,
-      // try to find an active vehicle with the same permit number
-      if (searchedVehicle && searchedVehicle.permit_number) {
-        const vehicleWithSamePermit = vehicles.find(v => 
-          v.is_active &&
-          v.permit_number === searchedVehicle.permit_number &&
-          v.registration_plate.toUpperCase() !== searchTerm
-        );
-        
-        // If found a vehicle with same permit, use it but keep the searched registration
-        if (vehicleWithSamePermit) {
-          vehicle = {
-            ...vehicleWithSamePermit,
-            registration_plate: searchTerm // Use the searched registration
-          };
-        }
+      if (matchingVehicles.length > 0) {
+        vehicle = {
+          ...matchingVehicles[0],
+          registration_plate: searchTerm.toUpperCase()
+        };
       }
     }
 
-    // If still no match, check if search term matches a permit number format
+    // If still no match, check if search term matches a permit number exactly
     if (!vehicle) {
       const permitMatch = vehicles.find(v => 
         v.permit_number && 
-        v.permit_number.trim().toUpperCase() === searchTerm.trim() &&
+        v.permit_number.trim().toUpperCase() === searchTerm.trim().toUpperCase() &&
         v.is_active
       );
       
