@@ -174,7 +174,7 @@ export default function TrendAnalysis() {
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="mb-6">
+        <div className="mb-6 print-content">
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2 flex items-center gap-3">
             <TrendingUp className="w-8 h-8 md:w-10 md:h-10" />
             KPI Trend Analysis
@@ -182,10 +182,13 @@ export default function TrendAnalysis() {
           <p className="text-slate-600 text-sm md:text-base">
             Track Green, Yellow, and Red vehicle registrations over time
           </p>
+          <p className="text-sm text-slate-600 mt-2 print:block">
+            Period: {safeFormatDate(startDate, "dd/MM/yyyy")} to {safeFormatDate(endDate, "dd/MM/yyyy")}
+          </p>
         </div>
 
         {/* Date Range Selector */}
-        <Card className="shadow-md">
+        <Card className="shadow-md no-print">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="w-5 h-5" />
@@ -219,7 +222,7 @@ export default function TrendAnalysis() {
         </Card>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 no-print">
           <Card className="shadow-md">
             <CardContent className="pt-6">
               <div className="text-sm text-slate-600 mb-1">Total Logs</div>
@@ -247,11 +250,11 @@ export default function TrendAnalysis() {
         </div>
 
         {/* Trend Chart */}
-        <Card className="shadow-lg">
-          <CardHeader>
+        <Card className="shadow-lg print-content">
+          <CardHeader className="print:block">
             <div className="flex items-center justify-between">
               <CardTitle>Daily Trend Graph</CardTitle>
-              <div className="flex gap-2">
+              <div className="flex gap-2 no-print">
                 <Button
                   onClick={handleDownloadCSV}
                   variant="outline"
@@ -273,7 +276,7 @@ export default function TrendAnalysis() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="print:block">
             {isFetching ? (
               <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
@@ -293,7 +296,10 @@ export default function TrendAnalysis() {
                     height={80}
                     interval="preserveStartEnd"
                   />
-                  <YAxis />
+                  <YAxis 
+                    domain={[0, 100]}
+                    ticks={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
+                  />
                   <Tooltip />
                   <Legend />
                   <Line 
@@ -409,14 +415,30 @@ export default function TrendAnalysis() {
             left: 0;
             top: 0;
             width: 100%;
+            page-break-inside: avoid;
           }
           @page {
             margin: 1.5cm;
+            size: A4;
           }
           .page-break {
             page-break-after: always;
           }
           button, .no-print {
+            display: none !important;
+          }
+          /* Ensure chart container is visible and properly sized for print */
+          .recharts-wrapper,
+          .recharts-surface {
+            visibility: visible !important;
+            display: block !important;
+          }
+          /* Hide summary cards in print to save space */
+          .grid.grid-cols-2.md\\:grid-cols-4 {
+            display: none !important;
+          }
+          /* Ensure date range selector is hidden */
+          .shadow-md:has(input[type="date"]) {
             display: none !important;
           }
         }
