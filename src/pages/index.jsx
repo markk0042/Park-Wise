@@ -82,12 +82,14 @@ function PagesContent() {
     
     // CRITICAL: Check for recovery hash FIRST, before any auth context calls
     // This prevents auto-login by intercepting recovery flows before they can authenticate
+    // We check this on every render to catch it immediately
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const hasRecoveryHash = hash && hash.includes('type=recovery');
     
     // If we detect recovery hash, immediately show Login page without checking auth
+    // This check happens BEFORE useAuth is called, preventing any authentication processing
     if (hasRecoveryHash) {
-        console.log('🔐 [PagesContent] Recovery hash detected - forcing Login page (bypassing auth check)');
+        console.log('🔐 [PagesContent] Recovery hash detected - FORCING Login page (bypassing ALL auth checks)');
         return <Login />;
     }
     
@@ -95,8 +97,17 @@ function PagesContent() {
     const { isAuthenticated, loading, error, profile: user, isPasswordRecovery } = useAuth();
     
     // Also check the recovery flag from context as a secondary check
+    // This catches cases where the hash was processed but flag wasn't set yet
     if (isPasswordRecovery) {
         console.log('🔐 [PagesContent] Recovery flag detected - showing Login page');
+        return <Login />;
+    }
+    
+    // FINAL SAFETY CHECK: Even if somehow we got here with a session and profile,
+    // if there's a recovery hash, we should still show Login
+    // This is a last resort check
+    if (hasRecoveryHash && (isAuthenticated || user)) {
+        console.log('🔐 [PagesContent] Recovery hash + authenticated state detected - OVERRIDING to Login page');
         return <Login />;
     }
 

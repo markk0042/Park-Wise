@@ -95,37 +95,48 @@ export function AuthProvider({ children }) {
       const hash = window.location.hash;
       const isPasswordReset = hash && hash.includes('type=recovery');
       
+      console.log('🔍 [AuthContext init] Starting initialization:', { isPasswordReset, hasHash: !!hash });
+      
       // Force users to sign in - clear any existing session on app load
       // BUT preserve recovery sessions for password reset
       try {
         const { data } = await supabase.auth.getSession();
         
-        if (data.session && !isPasswordReset) {
-          console.log('🔒 Clearing existing session - user must sign in');
+        if (isPasswordReset) {
+          console.log('🔐 [AuthContext init] Password reset flow detected - setting recovery mode');
+          // Set recovery flag immediately (should already be set from initial state, but ensure it)
+          setIsPasswordRecovery(true);
+          // Don't clear the session if it's a password reset - we need it for password update
+          if (data.session) {
+            console.log('🔐 [AuthContext init] Recovery session found - keeping session but blocking profile');
+            setSession(data.session);
+            // CRITICAL: Explicitly don't load profile during recovery - this prevents auto-login
+            setProfile(null);
+          } else {
+            console.log('⚠️ [AuthContext init] Recovery hash detected but no session yet');
+            setSession(null);
+            setProfile(null);
+          }
+        } else if (data.session) {
+          console.log('🔒 [AuthContext init] Clearing existing session - user must sign in');
           // Set session to null first to prevent API calls
           setSession(null);
           setProfile(null);
+          setIsPasswordRecovery(false);
           // Then sign out
           await supabase.auth.signOut();
-        } else if (isPasswordReset) {
-          console.log('🔐 [AuthContext init] Password reset flow detected - preserving recovery session');
-          // Set recovery flag immediately (should already be set from initial state, but ensure it)
-          setIsPasswordRecovery(true);
-          // Don't clear the session if it's a password reset
-          if (data.session) {
-            setSession(data.session);
-            // Explicitly don't load profile during recovery
-            setProfile(null);
-          }
         } else {
           setSession(null);
           setProfile(null);
           setIsPasswordRecovery(false);
         }
       } catch (err) {
-        console.error('Error during session initialization:', err);
+        console.error('❌ [AuthContext init] Error during session initialization:', err);
         setSession(null);
         setProfile(null);
+        if (!isPasswordReset) {
+          setIsPasswordRecovery(false);
+        }
       } finally {
         setLoading(false);
       }
@@ -230,14 +241,21 @@ export function AuthProvider({ children }) {
   }, [session, isPasswordRecovery]);
 
   const value = useMemo(
-    () => ({
-      session,
-      profile,
-      loading,
-      error,
-      // During password recovery, never consider user authenticated (even if session/profile exist)
-      isAuthenticated: isPasswordRecovery ? false : Boolean(session && profile),
-      isPasswordRecovery,
+    () => {
+      // Check hash directly in the memoized value - this ensures isAuthenticated is always false during recovery
+      const hash = typeof window !== 'undefined' ? window.location.hash : '';
+      const hasRecoveryHash = hash && hash.includes('type=recovery');
+      const inRecovery = isPasswordRecovery || hasRecoveryHash;
+      
+      return {
+        session,
+        profile,
+        loading,
+        error,
+        // CRITICAL: During password recovery, NEVER consider user authenticated
+        // Check both flag AND hash directly to be absolutely sure
+        isAuthenticated: inRecovery ? false : Boolean(session && profile),
+        isPasswordRecovery: inRecovery,
       signOut: () => supabase.auth.signOut(),
       signInWithPassword: async (email, password) => {
         console.log('🔐 Signing in with email and password');
