@@ -52,7 +52,15 @@ export default function Login() {
     
     try {
       // First, check if email exists in profiles
-      const emailExists = await checkEmailExists(email);
+      let emailExists = false;
+      try {
+        emailExists = await checkEmailExists(email);
+      } catch (checkError) {
+        console.error('Error checking email:', checkError);
+        // If check fails, still try to send reset (Supabase will handle if email doesn't exist)
+        // This provides better UX - user gets a message either way
+        emailExists = true; // Assume it exists and let Supabase handle validation
+      }
       
       if (!emailExists) {
         setStatus({ 
@@ -71,10 +79,29 @@ export default function Login() {
       });
       setShowForgotPassword(false);
     } catch (err) {
-      setStatus({ 
-        type: 'error', 
-        message: err.message || 'Failed to send password reset link. Please try again.' 
-      });
+      console.error('Password reset error:', err);
+      // If it's a 404, the endpoint might not be available - try direct Supabase reset
+      if (err?.status === 404 || err?.message?.includes('404')) {
+        try {
+          // Fallback: try direct Supabase reset (less secure but works)
+          await resetPassword(email);
+          setStatus({ 
+            type: 'success', 
+            message: 'Password reset link has been sent to your email. Please check your inbox.' 
+          });
+          setShowForgotPassword(false);
+        } catch (resetError) {
+          setStatus({ 
+            type: 'error', 
+            message: resetError.message || 'Failed to send password reset link. Please try again or contact support.' 
+          });
+        }
+      } else {
+        setStatus({ 
+          type: 'error', 
+          message: err.message || 'Failed to send password reset link. Please try again.' 
+        });
+      }
     } finally {
       setIsResettingPassword(false);
     }
