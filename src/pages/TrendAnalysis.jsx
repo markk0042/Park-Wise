@@ -444,11 +444,23 @@ export default function TrendAnalysis() {
             visibility: visible;
           }
           
-          .print-content {
+          /* Graph card - page 1 */
+          .print-content:not(.print-registrations-page) {
             position: absolute;
             left: 0;
             top: 0;
             width: 100%;
+            page-break-after: always;
+          }
+          
+          /* Registrations card - page 2 */
+          .print-registrations-page {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            page-break-before: always;
+            page-break-inside: avoid;
           }
           
           button, .no-print {
@@ -475,12 +487,6 @@ export default function TrendAnalysis() {
           /* Ensure SVG elements are visible */
           .print-chart-container svg {
             visibility: visible !important;
-          }
-          
-          /* Page break before registrations table - starts on page 2 */
-          .print-registrations-page {
-            page-break-before: always;
-            page-break-inside: avoid;
           }
           
           /* Style for registrations table */
