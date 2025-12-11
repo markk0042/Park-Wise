@@ -256,37 +256,38 @@ export function AuthProvider({ children }) {
         // Check both flag AND hash directly to be absolutely sure
         isAuthenticated: inRecovery ? false : Boolean(session && profile),
         isPasswordRecovery: inRecovery,
-      signOut: () => supabase.auth.signOut(),
-      signInWithPassword: async (email, password) => {
-        console.log('🔐 Signing in with email and password');
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        
-        if (error) {
-          throw error;
-        }
-        
-        return data;
-      },
-      resetPassword: async (email) => {
-        console.log('🔐 Requesting password reset for:', email);
-        // Use the current origin for redirects (works for both localhost and production)
-        const redirectUrl = window.location.origin;
-        
-        const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${redirectUrl}`,
-        });
-        
-        if (error) {
-          throw error;
-        }
-        
-        return data;
-      },
-    }),
-    [session, profile, loading, error]
+        signOut: () => supabase.auth.signOut(),
+        signInWithPassword: async (email, password) => {
+          console.log('🔐 Signing in with email and password');
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          
+          if (error) {
+            throw error;
+          }
+          
+          return data;
+        },
+        resetPassword: async (email) => {
+          console.log('🔐 Requesting password reset for:', email);
+          // Use the current origin for redirects (works for both localhost and production)
+          const redirectUrl = window.location.origin;
+          
+          const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${redirectUrl}`,
+          });
+          
+          if (error) {
+            throw error;
+          }
+          
+          return data;
+        },
+      };
+    },
+    [session, profile, loading, error, isPasswordRecovery]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
