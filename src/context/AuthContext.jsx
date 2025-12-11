@@ -8,12 +8,18 @@ const AuthContext = createContext(null);
 const INACTIVITY_TIMEOUT = 60 * 60 * 1000;
 
 export function AuthProvider({ children }) {
+  // Check for password recovery immediately (synchronously) before any state
+  const hash = typeof window !== 'undefined' ? window.location.hash : '';
+  const isRecoveryHash = hash && hash.includes('type=recovery');
+  
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(isRecoveryHash);
   const inactivityTimerRef = useRef(null);
+  
+  console.log('🔍 [AuthContext] Initial state:', { isRecoveryHash, isPasswordRecovery, hash: hash ? 'Hash found' : 'No hash' });
 
   // Set up activity listeners and inactivity timer
   useEffect(() => {
@@ -102,10 +108,15 @@ export function AuthProvider({ children }) {
           // Then sign out
           await supabase.auth.signOut();
         } else if (isPasswordReset) {
-          console.log('🔐 Password reset flow detected - preserving recovery session');
-          // Don't clear the session if it's a password reset
+          console.log('🔐 [AuthContext init] Password reset flow detected - preserving recovery session');
+          // Set recovery flag immediately (should already be set from initial state, but ensure it)
           setIsPasswordRecovery(true);
-          setSession(data.session);
+          // Don't clear the session if it's a password reset
+          if (data.session) {
+            setSession(data.session);
+            // Explicitly don't load profile during recovery
+            setProfile(null);
+          }
         } else {
           setSession(null);
           setProfile(null);
@@ -142,8 +153,10 @@ export function AuthProvider({ children }) {
         }
       } else if (event === 'PASSWORD_RECOVERY' || (newSession && isPasswordReset)) {
         // Preserve recovery sessions for password reset
-        console.log('🔐 Password recovery session detected');
+        console.log('🔐 [onAuthStateChange] Password recovery session detected');
+        // Set recovery flag FIRST, then session, and explicitly clear profile
         setIsPasswordRecovery(true);
+        setProfile(null); // Explicitly clear profile to prevent redirects
         setSession(newSession);
       } else {
         setSession(newSession);
@@ -162,13 +175,18 @@ export function AuthProvider({ children }) {
       if (!session) {
         setProfile(null);
         setError(null);
-        setLoading(false);
+        // Only set loading to false if we're not in recovery mode
+        // During recovery, we want to keep loading false so the Login page shows
+        if (!isPasswordRecovery) {
+          setLoading(false);
+        }
         return;
       }
       
       // Don't load profile during password recovery - it's not needed and might cause redirects
       if (isPasswordRecovery) {
-        console.log('🔐 Skipping profile load during password recovery');
+        console.log('🔐 [loadProfile] Skipping profile load during password recovery');
+        setProfile(null); // Ensure profile is null
         setLoading(false);
         return;
       }

@@ -80,7 +80,12 @@ function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
     // Call useAuth only once and get all needed values
-    const { isAuthenticated, loading, error, profile: user } = useAuth();
+    const { isAuthenticated, loading, error, profile: user, isPasswordRecovery } = useAuth();
+
+    // Always show Login page if in password recovery mode
+    if (isPasswordRecovery) {
+        return <Login />;
+    }
 
     if (loading) {
         return (
