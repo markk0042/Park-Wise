@@ -187,11 +187,11 @@ export function AuthProvider({ children }) {
       },
       resetPassword: async (email) => {
         console.log('🔐 Requesting password reset for:', email);
-        // Always use the Vercel URL for redirects
-        const redirectUrl = 'https://park-wise-two.vercel.app';
+        // Use the current origin for redirects (works for both localhost and production)
+        const redirectUrl = window.location.origin;
         
         const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${redirectUrl}/reset-password`,
+          redirectTo: `${redirectUrl}`,
         });
         
         if (error) {

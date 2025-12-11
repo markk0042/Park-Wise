@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -6,16 +6,69 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
 import { checkEmailExists } from '@/api';
-import { Shield, Lock } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import { Shield, Lock, KeyRound } from 'lucide-react';
 
 export default function Login() {
   const { signInWithPassword, resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState({ type: null, message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  // Check for password reset token in URL hash
+  useEffect(() => {
+    const checkPasswordResetToken = async () => {
+      // Check URL hash for access_token (Supabase password reset)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      
+      if (accessToken && type === 'recovery') {
+        // User came from password reset email
+        setIsResettingPasswordForm(true);
+        setStatus({ 
+          type: 'success', 
+          message: 'Please enter your new password below.' 
+        });
+        
+        // Clear the hash from URL
+        window.history.replaceState(null, '', window.location.pathname);
+        
+        // Exchange the token for a session
+        try {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: hashParams.get('refresh_token') || '',
+          });
+          
+          if (error) {
+            console.error('Error setting session:', error);
+            setStatus({ 
+              type: 'error', 
+              message: 'Invalid or expired reset link. Please request a new password reset.' 
+            });
+            setIsResettingPasswordForm(false);
+          }
+        } catch (err) {
+          console.error('Error processing reset token:', err);
+          setStatus({ 
+            type: 'error', 
+            message: 'Invalid or expired reset link. Please request a new password reset.' 
+          });
+          setIsResettingPasswordForm(false);
+        }
+      }
+    };
+    
+    checkPasswordResetToken();
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -107,53 +160,159 @@ export default function Login() {
     }
   };
 
+  const handlePasswordUpdate = async (event) => {
+    event.preventDefault();
+    setIsUpdatingPassword(true);
+    setStatus({ type: null, message: '' });
+    
+    if (!newPassword || !confirmPassword) {
+      setStatus({ type: 'error', message: 'Please enter and confirm your new password' });
+      setIsUpdatingPassword(false);
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      setStatus({ type: 'error', message: 'Password must be at least 6 characters long' });
+      setIsUpdatingPassword(false);
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setStatus({ type: 'error', message: 'Passwords do not match' });
+      setIsUpdatingPassword(false);
+      return;
+    }
+    
+    try {
+      // Update the password using Supabase
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      setStatus({ 
+        type: 'success', 
+        message: 'Password updated successfully! You can now sign in with your new password.' 
+      });
+      
+      // Clear the form and reset state
+      setNewPassword('');
+      setConfirmPassword('');
+      setIsResettingPasswordForm(false);
+      
+      // Optionally sign out the user so they sign in with new password
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+      }, 2000);
+      
+    } catch (err) {
+      console.error('Password update error:', err);
+      setStatus({ 
+        type: 'error', 
+        message: err.message || 'Failed to update password. The reset link may have expired. Please request a new one.' 
+      });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg border-2 border-slate-200">
         <CardHeader className="text-center">
           <div className="mx-auto w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mb-4">
-            <Shield className="w-8 h-8 text-white" />
+            {isResettingPasswordForm ? (
+              <KeyRound className="w-8 h-8 text-white" />
+            ) : (
+              <Shield className="w-8 h-8 text-white" />
+            )}
           </div>
-          <CardTitle className="text-2xl font-bold text-slate-900">ParkingLog Access</CardTitle>
+          <CardTitle className="text-2xl font-bold text-slate-900">
+            {isResettingPasswordForm ? 'Reset Your Password' : 'ParkingLog Access'}
+          </CardTitle>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={isResettingPasswordForm ? handlePasswordUpdate : handleSubmit}>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-600 text-center">
-              {showForgotPassword 
-                ? 'Enter your registered email to receive a password reset link.'
-                : 'Enter your email and password to sign in.'}
+              {isResettingPasswordForm
+                ? 'Enter your new password below. Make sure it\'s at least 6 characters long.'
+                : showForgotPassword 
+                  ? 'Enter your registered email to receive a password reset link.'
+                  : 'Enter your email and password to sign in.'}
             </p>
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
-                Email Address
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                required
-                className="h-11 text-base"
-                autoComplete="email"
-              />
-            </div>
-            {!showForgotPassword && (
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
-                  Password
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Enter your password"
-                  required
-                  className="h-11 text-base"
-                  autoComplete="current-password"
-                />
-              </div>
+            {isResettingPasswordForm ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword" className="text-sm font-semibold text-slate-700">
+                    New Password
+                  </Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    placeholder="Enter your new password"
+                    required
+                    className="h-11 text-base"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword" className="text-sm font-semibold text-slate-700">
+                    Confirm New Password
+                  </Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Confirm your new password"
+                    required
+                    className="h-11 text-base"
+                    autoComplete="new-password"
+                    minLength={6}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
+                    Email Address
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="h-11 text-base"
+                    autoComplete="email"
+                  />
+                </div>
+                {!showForgotPassword && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                      Password
+                    </Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="Enter your password"
+                      required
+                      className="h-11 text-base"
+                      autoComplete="current-password"
+                    />
+                  </div>
+                )}
+              </>
             )}
             {status.type && (
               <Alert variant={status.type === 'error' ? 'destructive' : 'default'}>
@@ -162,7 +321,37 @@ export default function Login() {
             )}
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            {!showForgotPassword ? (
+            {isResettingPasswordForm ? (
+              <>
+                <Button type="submit" className="w-full h-11" disabled={isUpdatingPassword}>
+                  {isUpdatingPassword ? (
+                    <>
+                      <KeyRound className="w-4 h-4 mr-2 animate-spin" />
+                      Updating Password...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4 mr-2" />
+                      Update Password
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-sm text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    setIsResettingPasswordForm(false);
+                    setStatus({ type: null, message: '' });
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    window.history.replaceState(null, '', window.location.pathname);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : !showForgotPassword ? (
               <>
                 <Button type="submit" className="w-full h-11" disabled={isSubmitting}>
                   {isSubmitting ? 'Signing in...' : 'Sign In'}
