@@ -10,6 +10,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Helper function to safely format dates
+const safeFormatDate = (dateValue, formatString, fallback = 'N/A') => {
+  if (!dateValue) return fallback;
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return fallback;
+    }
+    return format(date, formatString);
+  } catch (error) {
+    console.error('Date formatting error:', error, dateValue);
+    return fallback;
+  }
+};
+
 export default function ComplaintReportGenerator({ complaints, selectedIds, onClose }) {
   const [generating, setGenerating] = useState(false);
 
@@ -192,7 +207,7 @@ export default function ComplaintReportGenerator({ complaints, selectedIds, onCl
                     <div>
                       <p className="font-semibold text-slate-600 mb-1">Date & Time</p>
                       <p className="text-slate-900">
-                        {format(new Date(complaint.reported_date), 'PPP')} at {complaint.reported_time}
+                        {safeFormatDate(complaint.reported_date, 'PPP', 'Unknown date')} {complaint.reported_time ? `at ${complaint.reported_time}` : ''}
                       </p>
                     </div>
                     {complaint.location && (
@@ -247,9 +262,9 @@ export default function ComplaintReportGenerator({ complaints, selectedIds, onCl
                   )}
 
                   <div className="border-t pt-4 mt-4 text-xs text-slate-500">
-                    <p><strong>Record Created:</strong> {format(new Date(complaint.created_date), 'PPP')}</p>
+                    <p><strong>Record Created:</strong> {safeFormatDate(complaint.created_date, 'PPP', 'Unknown date')}</p>
                     {complaint.updated_date && (
-                      <p><strong>Last Updated:</strong> {format(new Date(complaint.updated_date), 'PPP')}</p>
+                      <p><strong>Last Updated:</strong> {safeFormatDate(complaint.updated_date, 'PPP', 'Unknown date')}</p>
                     )}
                   </div>
                 </CardContent>

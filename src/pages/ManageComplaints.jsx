@@ -19,6 +19,21 @@ import ComplaintReportGenerator from "../components/complaints/ComplaintReportGe
 import { useAuth } from "@/context/AuthContext";
 import { bulkDeleteComplaints, deleteComplaint, fetchComplaints, updateComplaint } from "@/api";
 
+// Helper function to safely format dates
+const safeFormatDate = (dateValue, formatString, fallback = 'N/A') => {
+  if (!dateValue) return fallback;
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return fallback;
+    }
+    return format(date, formatString);
+  } catch (error) {
+    console.error('Date formatting error:', error, dateValue);
+    return fallback;
+  }
+};
+
 export default function ManageComplaints() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -320,7 +335,7 @@ export default function ManageComplaints() {
                                 <span>📍 {complaint.location}</span>
                               )}
                               <span>
-                                📅 {format(new Date(complaint.reported_date), 'MMM d, yyyy')} at {complaint.reported_time}
+                                📅 {safeFormatDate(complaint.reported_date, 'MMM d, yyyy')} {complaint.reported_time ? `at ${complaint.reported_time}` : ''}
                               </span>
                               <span className="text-slate-400">
                                 By {complaint.created_by}
@@ -359,7 +374,7 @@ export default function ManageComplaints() {
               <DialogHeader>
                 <DialogTitle className="text-xl md:text-2xl">{selectedComplaint.title}</DialogTitle>
                 <DialogDescription>
-                  Submitted on {format(new Date(selectedComplaint.created_date), 'PPP')}
+                  Submitted on {safeFormatDate(selectedComplaint.created_date, 'PPP', 'Unknown date')}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-4">
