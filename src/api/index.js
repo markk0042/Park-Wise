@@ -25,6 +25,10 @@ export const deleteUser = async (id) => {
   const result = await httpClient.delete(`/auth/users/${id}`);
   return result;
 };
+export const checkEmailExists = async (email) => {
+  const { exists } = await httpClient.post('/auth/check-email', { email });
+  return exists;
+};
 
 // Vehicles
 export const fetchVehicles = async (orderBy = 'permit_number') => {

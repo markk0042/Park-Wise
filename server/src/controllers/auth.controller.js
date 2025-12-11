@@ -134,3 +134,35 @@ export const deleteUser = async (req, res, next) => {
     next(err);
   }
 };
+
+// Check if email exists in profiles (public endpoint for password reset)
+export const checkEmailExists = async (req, res, next) => {
+  try {
+    const schema = z.object({
+      email: z.string().email()
+    });
+    const { email } = schema.parse(req.body);
+    
+    // Check if user exists in auth
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserByEmail(email);
+    
+    if (!authUser?.user) {
+      return res.json({ exists: false, message: 'Email not found' });
+    }
+    
+    // Check if profile exists
+    const { data: profile, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email')
+      .eq('id', authUser.user.id)
+      .single();
+    
+    if (error || !profile) {
+      return res.json({ exists: false, message: 'Email not registered' });
+    }
+    
+    res.json({ exists: true, message: 'Email found' });
+  } catch (err) {
+    next(err);
+  }
+};

@@ -6,7 +6,8 @@ import {
   listUsers,
   updateUser,
   inviteUser,
-  deleteUser
+  deleteUser,
+  checkEmailExists
 } from '../controllers/auth.controller.js';
 
 const router = Router();
@@ -17,5 +18,6 @@ router.get('/users', requireAuth, requireAdmin, listUsers);
 router.patch('/users/:id', requireAuth, requireAdmin, updateUser);
 router.post('/users/invite', requireAuth, requireSuperAdmin, inviteUser);
 router.delete('/users/:id', requireAuth, requireSuperAdmin, deleteUser);
+router.post('/check-email', checkEmailExists); // Public endpoint for password reset
 
 export default router;

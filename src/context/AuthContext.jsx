@@ -185,6 +185,21 @@ export function AuthProvider({ children }) {
         
         return data;
       },
+      resetPassword: async (email) => {
+        console.log('🔐 Requesting password reset for:', email);
+        // Always use the Vercel URL for redirects
+        const redirectUrl = 'https://park-wise-two.vercel.app';
+        
+        const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${redirectUrl}/reset-password`,
+        });
+        
+        if (error) {
+          throw error;
+        }
+        
+        return data;
+      },
     }),
     [session, profile, loading, error]
   );

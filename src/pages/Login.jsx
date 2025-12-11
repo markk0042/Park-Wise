@@ -5,14 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
-import { Shield } from 'lucide-react';
+import { checkEmailExists } from '@/api';
+import { Shield, Lock } from 'lucide-react';
 
 export default function Login() {
-  const { signInWithPassword } = useAuth();
+  const { signInWithPassword, resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState({ type: null, message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -36,6 +39,47 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async (event) => {
+    event.preventDefault();
+    setIsResettingPassword(true);
+    setStatus({ type: null, message: '' });
+    
+    if (!email) {
+      setStatus({ type: 'error', message: 'Please enter your email address' });
+      setIsResettingPassword(false);
+      return;
+    }
+    
+    try {
+      // First, check if email exists in profiles
+      const emailExists = await checkEmailExists(email);
+      
+      if (!emailExists) {
+        setStatus({ 
+          type: 'error', 
+          message: 'This email is not registered. Please contact an administrator.' 
+        });
+        setIsResettingPassword(false);
+        return;
+      }
+      
+      // If email exists, send password reset link
+      await resetPassword(email);
+      setStatus({ 
+        type: 'success', 
+        message: 'Password reset link has been sent to your email. Please check your inbox.' 
+      });
+      setShowForgotPassword(false);
+    } catch (err) {
+      setStatus({ 
+        type: 'error', 
+        message: err.message || 'Failed to send password reset link. Please try again.' 
+      });
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg border-2 border-slate-200">
@@ -48,7 +92,9 @@ export default function Login() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-600 text-center">
-              Enter your email and password to sign in.
+              {showForgotPassword 
+                ? 'Enter your registered email to receive a password reset link.'
+                : 'Enter your email and password to sign in.'}
             </p>
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
@@ -65,31 +111,81 @@ export default function Login() {
                 autoComplete="email"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
-                Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
-                required
-                className="h-11 text-base"
-                autoComplete="current-password"
-              />
-            </div>
+            {!showForgotPassword && (
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className="h-11 text-base"
+                  autoComplete="current-password"
+                />
+              </div>
+            )}
             {status.type && (
               <Alert variant={status.type === 'error' ? 'destructive' : 'default'}>
                 <AlertDescription>{status.message}</AlertDescription>
               </Alert>
             )}
           </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full h-11" disabled={isSubmitting}>
-              {isSubmitting ? 'Signing in...' : 'Sign In'}
-            </Button>
+          <CardFooter className="flex flex-col gap-3">
+            {!showForgotPassword ? (
+              <>
+                <Button type="submit" className="w-full h-11" disabled={isSubmitting}>
+                  {isSubmitting ? 'Signing in...' : 'Sign In'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-sm text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    setShowForgotPassword(true);
+                    setStatus({ type: null, message: '' });
+                    setPassword('');
+                  }}
+                >
+                  Forgot your password?
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="w-full h-11"
+                  disabled={isResettingPassword}
+                >
+                  {isResettingPassword ? (
+                    <>
+                      <Lock className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4 mr-2" />
+                      Send Reset Link
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-sm text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setStatus({ type: null, message: '' });
+                  }}
+                >
+                  Back to Sign In
+                </Button>
+              </>
+            )}
           </CardFooter>
         </form>
       </Card>
