@@ -197,7 +197,7 @@ export default function TrendAnalysis() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 print-wrapper">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 print-container">
         {/* Header */}
         <div className="mb-6 print-content">
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2 flex items-center gap-3">
@@ -275,7 +275,7 @@ export default function TrendAnalysis() {
         </div>
 
         {/* Trend Chart */}
-        <Card className="shadow-lg print-content">
+        <Card className="shadow-lg print-content print-graph-page">
           <CardHeader className="print:block">
             <div className="flex items-center justify-between">
               <CardTitle>Daily Trend Graph</CardTitle>
@@ -440,24 +440,32 @@ export default function TrendAnalysis() {
             visibility: hidden;
           }
           
+          .print-container, .print-container * {
+            visibility: visible;
+          }
+          
+          .print-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          
           .print-content, .print-content * {
             visibility: visible;
           }
           
           /* Graph card - page 1 */
-          .print-content:not(.print-registrations-page) {
-            position: absolute;
-            left: 0;
-            top: 0;
+          .print-graph-page {
+            position: relative;
             width: 100%;
             page-break-after: always;
+            page-break-inside: avoid;
           }
           
           /* Registrations card - page 2 */
           .print-registrations-page {
-            position: absolute;
-            left: 0;
-            top: 0;
+            position: relative;
             width: 100%;
             page-break-before: always;
             page-break-inside: avoid;
