@@ -4,16 +4,41 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { format, parseISO, startOfDay, endOfDay, eachDayOfInterval, isWithinInterval } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay, eachDayOfInterval, isWithinInterval, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Calendar, TrendingUp, Download, Printer } from "lucide-react";
 import { fetchParkingLogs } from "@/api";
 import { useAuth } from "@/context/AuthContext";
 import { safeFormatDate } from "@/lib/utils";
 
+// Function to get the past 7 days (Monday to Sunday)
+function getPastWeekMondayToSunday() {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  
+  // Calculate the most recent Sunday
+  // If today is Sunday, use today; otherwise go back to last Sunday
+  const daysToLastSunday = dayOfWeek === 0 ? 0 : dayOfWeek;
+  const lastSunday = new Date(today);
+  lastSunday.setDate(today.getDate() - daysToLastSunday);
+  lastSunday.setHours(23, 59, 59, 999); // End of day
+  
+  // Go back 6 days from Sunday to get Monday (7 days total: Mon, Tue, Wed, Thu, Fri, Sat, Sun)
+  const lastMonday = new Date(lastSunday);
+  lastMonday.setDate(lastSunday.getDate() - 6);
+  lastMonday.setHours(0, 0, 0, 0); // Start of day
+  
+  return {
+    startDate: format(lastMonday, "yyyy-MM-dd"),
+    endDate: format(lastSunday, "yyyy-MM-dd")
+  };
+}
+
 export default function TrendAnalysis() {
-  const [startDate, setStartDate] = useState(format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"));
-  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  // Initialize with past 7 days (Monday to Sunday)
+  const pastWeek = useMemo(() => getPastWeekMondayToSunday(), []);
+  const [startDate, setStartDate] = useState(pastWeek.startDate);
+  const [endDate, setEndDate] = useState(pastWeek.endDate);
   const { profile: user } = useAuth();
 
   const { data: logs = [], isFetching } = useQuery({
@@ -286,48 +311,50 @@ export default function TrendAnalysis() {
                 No data available for the selected date range
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={400}>
-                <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis 
-                    domain={[0, 100]}
-                    ticks={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
-                  />
-                  <Tooltip />
-                  <Legend />
-                  <Line 
-                    type="monotone" 
-                    dataKey="Green" 
-                    stroke="#10b981" 
-                    strokeWidth={2}
-                    dot={{ fill: "#10b981", r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="Yellow" 
-                    stroke="#f59e0b" 
-                    strokeWidth={2}
-                    dot={{ fill: "#f59e0b", r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="Red" 
-                    stroke="#ef4444" 
-                    strokeWidth={2}
-                    dot={{ fill: "#ef4444", r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="print-chart-container">
+                <ResponsiveContainer width="100%" height={400} className="print:!h-[500px]">
+                  <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis 
+                      domain={[0, 100]}
+                      ticks={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
+                    />
+                    <Tooltip />
+                    <Legend />
+                    <Line 
+                      type="monotone" 
+                      dataKey="Green" 
+                      stroke="#10b981" 
+                      strokeWidth={2}
+                      dot={{ fill: "#10b981", r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="Yellow" 
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      dot={{ fill: "#f59e0b", r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="Red" 
+                      stroke="#ef4444" 
+                      strokeWidth={2}
+                      dot={{ fill: "#ef4444", r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -404,42 +431,89 @@ export default function TrendAnalysis() {
       {/* Print Styles */}
       <style>{`
         @media print {
+          @page {
+            margin: 1.5cm;
+            size: A4;
+          }
+          
           body * {
             visibility: hidden;
           }
-          .print-content, .print-content * {
-            visibility: visible;
+          
+          .print-content, 
+          .print-content * {
+            visibility: visible !important;
           }
+          
           .print-content {
             position: absolute;
             left: 0;
             top: 0;
             width: 100%;
-            page-break-inside: avoid;
           }
-          @page {
-            margin: 1.5cm;
-            size: A4;
-          }
-          .page-break {
-            page-break-after: always;
-          }
+          
+          /* Hide non-print elements */
           button, .no-print {
             display: none !important;
+            visibility: hidden !important;
           }
-          /* Ensure chart container is visible and properly sized for print */
-          .recharts-wrapper,
-          .recharts-surface {
+          
+          /* Hide summary cards and date selector */
+          .grid.grid-cols-2.md\\:grid-cols-4,
+          .shadow-md:has(input[type="date"]) {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          
+          /* Ensure chart is visible and properly rendered */
+          .print-chart-container {
+            visibility: visible !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            page-break-inside: avoid;
+            margin-bottom: 20px;
+          }
+          
+          .print-chart-container .recharts-wrapper,
+          .print-chart-container .recharts-surface,
+          .print-chart-container svg {
+            visibility: visible !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            max-width: 100% !important;
+          }
+          
+          /* Ensure chart elements are visible */
+          .recharts-cartesian-grid,
+          .recharts-cartesian-axis,
+          .recharts-line,
+          .recharts-line-dot,
+          .recharts-legend-wrapper,
+          .recharts-tooltip-wrapper {
             visibility: visible !important;
             display: block !important;
           }
-          /* Hide summary cards in print to save space */
-          .grid.grid-cols-2.md\\:grid-cols-4 {
-            display: none !important;
+          
+          /* Style for registrations table */
+          .print-content table {
+            page-break-inside: auto;
+            margin-top: 20px;
           }
-          /* Ensure date range selector is hidden */
-          .shadow-md:has(input[type="date"]) {
-            display: none !important;
+          
+          .print-content tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          
+          .page-break {
+            page-break-after: always;
+          }
+          
+          /* Ensure proper spacing */
+          .print-content > div {
+            margin-bottom: 20px;
           }
         }
       `}</style>
