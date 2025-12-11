@@ -361,7 +361,7 @@ export default function TrendAnalysis() {
 
         {/* Yellow and Red Registrations */}
         {yellowAndRedLogs.length > 0 && (
-          <Card className="shadow-lg print-hide-registrations">
+          <Card className="shadow-lg print-content print-registrations-page">
             <CardHeader>
               <CardTitle>Yellow and Red Registrations ({yellowAndRedLogs.length})</CardTitle>
               <p className="text-sm text-slate-600 mt-1">
@@ -461,12 +461,6 @@ export default function TrendAnalysis() {
             display: none !important;
           }
           
-          /* Hide registrations table in print */
-          .print-hide-registrations {
-            display: none !important;
-            visibility: hidden !important;
-          }
-          
           /* Ensure chart container and all its children are visible */
           .print-chart-container,
           .print-chart-container * {
@@ -481,6 +475,12 @@ export default function TrendAnalysis() {
           /* Ensure SVG elements are visible */
           .print-chart-container svg {
             visibility: visible !important;
+          }
+          
+          /* Page break before registrations table - starts on page 2 */
+          .print-registrations-page {
+            page-break-before: always;
+            page-break-inside: avoid;
           }
           
           /* Style for registrations table */
