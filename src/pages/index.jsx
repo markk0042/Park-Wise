@@ -79,17 +79,24 @@ function _getCurrentPage(url) {
 function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
-    // Call useAuth only once and get all needed values
-    const { isAuthenticated, loading, error, profile: user, isPasswordRecovery } = useAuth();
     
-    // Check for recovery hash directly as a safety check
+    // CRITICAL: Check for recovery hash FIRST, before any auth context calls
+    // This prevents auto-login by intercepting recovery flows before they can authenticate
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const hasRecoveryHash = hash && hash.includes('type=recovery');
-    const isInRecovery = isPasswordRecovery || hasRecoveryHash;
-
-    // Always show Login page if in password recovery mode (check both flag and hash)
-    if (isInRecovery) {
-        console.log('🔐 [PagesContent] Recovery mode detected - showing Login page');
+    
+    // If we detect recovery hash, immediately show Login page without checking auth
+    if (hasRecoveryHash) {
+        console.log('🔐 [PagesContent] Recovery hash detected - forcing Login page (bypassing auth check)');
+        return <Login />;
+    }
+    
+    // Call useAuth only after we've confirmed it's not a recovery flow
+    const { isAuthenticated, loading, error, profile: user, isPasswordRecovery } = useAuth();
+    
+    // Also check the recovery flag from context as a secondary check
+    if (isPasswordRecovery) {
+        console.log('🔐 [PagesContent] Recovery flag detected - showing Login page');
         return <Login />;
     }
 

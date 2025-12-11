@@ -139,8 +139,16 @@ export function AuthProvider({ children }) {
       const hash = window.location.hash;
       const isPasswordReset = hash && hash.includes('type=recovery');
       
-      // When user signs in, set the session and start the timer
+      // When user signs in, check if it's a recovery session first
       if (event === 'SIGNED_IN' && newSession) {
+        if (isPasswordReset) {
+          // This is a recovery sign-in, treat it differently - BLOCK normal auth flow
+          console.log('🔐 [onAuthStateChange] Recovery SIGNED_IN detected - BLOCKING normal auth flow');
+          setIsPasswordRecovery(true);
+          setProfile(null); // CRITICAL: Never load profile during recovery
+          setSession(newSession);
+          return; // Exit early - don't proceed with normal sign-in
+        }
         console.log('✅ User signed in - starting inactivity timer');
         setSession(newSession);
       } else if (event === 'SIGNED_OUT') {
@@ -172,22 +180,28 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const loadProfile = async () => {
+      // Check hash directly as well, not just the flag
+      const hash = typeof window !== 'undefined' ? window.location.hash : '';
+      const hasRecoveryHash = hash && hash.includes('type=recovery');
+      const inRecovery = isPasswordRecovery || hasRecoveryHash;
+      
       if (!session) {
         setProfile(null);
         setError(null);
         // Only set loading to false if we're not in recovery mode
         // During recovery, we want to keep loading false so the Login page shows
-        if (!isPasswordRecovery) {
+        if (!inRecovery) {
           setLoading(false);
         }
         return;
       }
       
-      // Don't load profile during password recovery - it's not needed and might cause redirects
-      if (isPasswordRecovery) {
-        console.log('🔐 [loadProfile] Skipping profile load during password recovery');
-        setProfile(null); // Ensure profile is null
+      // CRITICAL: Never load profile during password recovery - this prevents auto-login
+      if (inRecovery) {
+        console.log('🔐 [loadProfile] BLOCKING profile load during password recovery (hash or flag detected)');
+        setProfile(null); // Explicitly ensure profile is null
         setLoading(false);
+        // Don't return early - we want to make sure profile stays null
         return;
       }
       
