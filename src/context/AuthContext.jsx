@@ -172,17 +172,18 @@ export function AuthProvider({ children }) {
       error,
       isAuthenticated: Boolean(session && profile),
       signOut: () => supabase.auth.signOut(),
-      signInWithOtp: (email) => {
-        // Always use the Vercel URL for redirects
-        const redirectUrl = 'https://park-wise-two.vercel.app';
-        console.log('🔐 Requesting magic link with redirect:', redirectUrl);
-        
-        return supabase.auth.signInWithOtp({
+      signInWithPassword: async (email, password) => {
+        console.log('🔐 Signing in with email and password');
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
-          options: {
-            emailRedirectTo: redirectUrl,
-          },
+          password,
         });
+        
+        if (error) {
+          throw error;
+        }
+        
+        return data;
       },
     }),
     [session, profile, loading, error]

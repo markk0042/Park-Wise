@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
 import { Shield } from 'lucide-react';
 
 export default function Login() {
-  const { signInWithOtp } = useAuth();
+  const { signInWithPassword } = useAuth();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [status, setStatus] = useState({ type: null, message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -16,11 +18,19 @@ export default function Login() {
     event.preventDefault();
     setIsSubmitting(true);
     setStatus({ type: null, message: '' });
+    
+    if (!email || !password) {
+      setStatus({ type: 'error', message: 'Please enter both email and password' });
+      setIsSubmitting(false);
+      return;
+    }
+    
     try {
-      await signInWithOtp(email);
-      setStatus({ type: 'success', message: 'Check your email for the login link.' });
+      await signInWithPassword(email, password);
+      // Success - user will be redirected automatically via auth state change
+      setStatus({ type: 'success', message: 'Signing in...' });
     } catch (err) {
-      setStatus({ type: 'error', message: err.message || 'Failed to send magic link' });
+      setStatus({ type: 'error', message: err.message || 'Invalid email or password' });
     } finally {
       setIsSubmitting(false);
     }
@@ -38,12 +48,12 @@ export default function Login() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-600 text-center">
-              Enter your work email to receive a one-time login link.
+              Enter your email and password to sign in.
             </p>
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-semibold text-slate-700">
+              <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
                 Email Address
-              </label>
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -52,6 +62,22 @@ export default function Login() {
                 placeholder="you@example.com"
                 required
                 className="h-11 text-base"
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Enter your password"
+                required
+                className="h-11 text-base"
+                autoComplete="current-password"
               />
             </div>
             {status.type && (
@@ -62,7 +88,7 @@ export default function Login() {
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full h-11" disabled={isSubmitting}>
-              {isSubmitting ? 'Sending link...' : 'Send Magic Link'}
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
             </Button>
           </CardFooter>
         </form>
