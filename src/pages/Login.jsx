@@ -11,6 +11,12 @@ import { Shield, Lock, KeyRound } from 'lucide-react';
 
 export default function Login() {
   const { signInWithPassword, resetPassword, isPasswordRecovery } = useAuth();
+  
+  // Check for recovery hash directly in Login component as a safety check
+  const hash = typeof window !== 'undefined' ? window.location.hash : '';
+  const hasRecoveryHash = hash && hash.includes('type=recovery');
+  const shouldShowResetForm = isPasswordRecovery || hasRecoveryHash;
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -19,8 +25,15 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(false);
+  const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(shouldShowResetForm);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  
+  console.log('🔍 [Login] Component state:', { 
+    isPasswordRecovery, 
+    hasRecoveryHash, 
+    shouldShowResetForm,
+    hash: hash ? 'Hash found' : 'No hash'
+  });
 
   // Check for password reset token in URL hash - MUST run immediately on mount
   useEffect(() => {
@@ -290,19 +303,19 @@ export default function Login() {
             )}
           </div>
           <CardTitle className="text-2xl font-bold text-slate-900">
-            {isResettingPasswordForm ? 'Reset Your Password' : 'ParkingLog Access'}
+            {(isResettingPasswordForm || shouldShowResetForm) ? 'Reset Your Password' : 'ParkingLog Access'}
           </CardTitle>
         </CardHeader>
-        <form onSubmit={isResettingPasswordForm ? handlePasswordUpdate : handleSubmit}>
+        <form onSubmit={(isResettingPasswordForm || shouldShowResetForm) ? handlePasswordUpdate : handleSubmit}>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-600 text-center">
-              {isResettingPasswordForm
+              {(isResettingPasswordForm || shouldShowResetForm)
                 ? 'Enter your new password below. Make sure it\'s at least 6 characters long.'
                 : showForgotPassword 
                   ? 'Enter your registered email to receive a password reset link.'
                   : 'Enter your email and password to sign in.'}
             </p>
-            {isResettingPasswordForm ? (
+            {(isResettingPasswordForm || shouldShowResetForm) ? (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="newPassword" className="text-sm font-semibold text-slate-700">
@@ -380,7 +393,7 @@ export default function Login() {
             )}
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            {isResettingPasswordForm ? (
+            {(isResettingPasswordForm || shouldShowResetForm) ? (
               <>
                 <Button type="submit" className="w-full h-11" disabled={isUpdatingPassword}>
                   {isUpdatingPassword ? (

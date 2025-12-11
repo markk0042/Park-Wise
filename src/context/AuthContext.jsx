@@ -221,7 +221,8 @@ export function AuthProvider({ children }) {
       profile,
       loading,
       error,
-      isAuthenticated: Boolean(session && profile && !isPasswordRecovery),
+      // During password recovery, never consider user authenticated (even if session/profile exist)
+      isAuthenticated: isPasswordRecovery ? false : Boolean(session && profile),
       isPasswordRecovery,
       signOut: () => supabase.auth.signOut(),
       signInWithPassword: async (email, password) => {

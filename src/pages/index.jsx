@@ -81,9 +81,15 @@ function PagesContent() {
     const currentPage = _getCurrentPage(location.pathname);
     // Call useAuth only once and get all needed values
     const { isAuthenticated, loading, error, profile: user, isPasswordRecovery } = useAuth();
+    
+    // Check for recovery hash directly as a safety check
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    const hasRecoveryHash = hash && hash.includes('type=recovery');
+    const isInRecovery = isPasswordRecovery || hasRecoveryHash;
 
-    // Always show Login page if in password recovery mode
-    if (isPasswordRecovery) {
+    // Always show Login page if in password recovery mode (check both flag and hash)
+    if (isInRecovery) {
+        console.log('🔐 [PagesContent] Recovery mode detected - showing Login page');
         return <Login />;
     }
 
