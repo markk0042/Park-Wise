@@ -26,6 +26,7 @@ export default function ManageComplaints() {
   const [showDialog, setShowDialog] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showReportGenerator, setShowReportGenerator] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   const queryClient = useQueryClient();
   const { profile: user } = useAuth();
@@ -110,6 +111,7 @@ export default function ManageComplaints() {
 
   const handleViewDetails = (complaint) => {
     setSelectedComplaint(complaint);
+    setImageLoadError(false); // Reset image error state when opening dialog
     setShowDialog(true);
   };
 
@@ -345,7 +347,12 @@ export default function ManageComplaints() {
         </div>
       </div>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={(open) => {
+        setShowDialog(open);
+        if (!open) {
+          setImageLoadError(false); // Reset image error when dialog closes
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           {selectedComplaint && (
             <>
@@ -371,19 +378,21 @@ export default function ManageComplaints() {
                 {selectedComplaint.image_url && (
                   <div>
                     <h4 className="font-semibold text-sm text-slate-600 mb-2">Photo Evidence</h4>
-                    <img
-                      src={selectedComplaint.image_url}
-                      alt="Evidence"
-                      className="w-full rounded-lg border-2 border-slate-200"
-                      loading="lazy"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'block';
-                      }}
-                    />
-                    <div style={{ display: 'none' }} className="p-4 bg-slate-100 rounded-lg text-center text-slate-600 text-sm">
-                      Image failed to load
-                    </div>
+                    {imageLoadError ? (
+                      <div className="p-4 bg-slate-100 rounded-lg border-2 border-slate-200 text-center text-slate-600 text-sm">
+                        Image failed to load
+                      </div>
+                    ) : (
+                      <img
+                        src={selectedComplaint.image_url}
+                        alt="Evidence"
+                        className="w-full rounded-lg border-2 border-slate-200"
+                        loading="lazy"
+                        onError={() => {
+                          setImageLoadError(true);
+                        }}
+                      />
+                    )}
                   </div>
                 )}
 
