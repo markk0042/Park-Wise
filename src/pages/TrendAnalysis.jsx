@@ -199,8 +199,8 @@ export default function TrendAnalysis() {
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 print-wrapper">
       <div className="max-w-7xl mx-auto space-y-6 print-container">
         {/* Header */}
-        <div className="mb-6 print-content">
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2 flex items-center gap-3">
+        <div className="mb-6 print-content text-center">
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2 flex items-center justify-center gap-3">
             <TrendingUp className="w-8 h-8 md:w-10 md:h-10" />
             KPI Trend Analysis
           </h1>
