@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/context/AuthContext";
 import { createComplaint, uploadEvidence } from "@/api";
+import { getImageUrl } from "@/lib/utils";
 
 export default function NonComplianceReport() {
   const [formData, setFormData] = useState({
@@ -241,7 +242,7 @@ export default function NonComplianceReport() {
                         <CheckCircle className="w-12 h-12 text-emerald-500" />
                         <p className="text-sm text-emerald-600 font-medium">✓ Image uploaded successfully</p>
                         <img 
-                          src={formData.image_url} 
+                          src={getImageUrl(formData.image_url)} 
                           alt="Uploaded evidence" 
                           className="mt-3 max-h-64 rounded-lg border-2 border-emerald-200"
                         />

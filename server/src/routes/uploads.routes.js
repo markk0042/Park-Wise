@@ -1,13 +1,16 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { requireAuth, requireApproved, requireAdmin } from '../middleware/auth.js';
-import { uploadEvidence, cleanupOldImages } from '../controllers/upload.controller.js';
+import { uploadEvidence, cleanupOldImages, serveImage } from '../controllers/upload.controller.js';
 import { env } from '../config/env.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.post('/evidence', requireAuth, requireApproved, upload.single('file'), uploadEvidence);
+
+// Serve images (requires authentication for security)
+router.get('/serve/:path', requireAuth, serveImage);
 
 // Cleanup endpoint - requires secret token (for cron jobs) or admin auth
 const cleanupMiddleware = (req, res, next) => {

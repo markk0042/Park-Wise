@@ -18,6 +18,7 @@ import {
 import ComplaintReportGenerator from "../components/complaints/ComplaintReportGenerator";
 import { useAuth } from "@/context/AuthContext";
 import { bulkDeleteComplaints, deleteComplaint, fetchComplaints, updateComplaint } from "@/api";
+import { getImageUrl } from "@/lib/utils";
 
 // Helper function to safely format dates
 const safeFormatDate = (dateValue, formatString, fallback = 'N/A') => {
@@ -399,13 +400,14 @@ export default function ManageComplaints() {
                       </div>
                     ) : (
                       <img
-                        src={selectedComplaint.image_url}
+                        src={getImageUrl(selectedComplaint.image_url)}
                         alt="Evidence"
                         className="w-full rounded-lg border-2 border-slate-200"
                         loading="lazy"
                         onError={() => {
                           setImageLoadError(true);
                         }}
+                        crossOrigin="anonymous"
                       />
                     )}
                   </div>

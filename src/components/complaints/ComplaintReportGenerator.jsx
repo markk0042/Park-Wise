@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getImageUrl } from "@/lib/utils";
 
 // Helper function to safely format dates
 const safeFormatDate = (dateValue, formatString, fallback = 'N/A') => {
@@ -234,7 +235,7 @@ export default function ComplaintReportGenerator({ complaints, selectedIds, onCl
                       <p className="font-semibold text-slate-600 mb-2">Photo Evidence</p>
                       <div className="border-2 border-slate-200 rounded-lg overflow-hidden bg-slate-50">
                         <img
-                          src={complaint.image_url}
+                          src={getImageUrl(complaint.image_url)}
                           alt="Evidence"
                           className="evidence-image"
                           style={{ maxHeight: '500px', objectFit: 'contain', margin: '0 auto', display: 'block' }}

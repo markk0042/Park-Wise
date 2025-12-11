@@ -44,6 +44,57 @@ const listAllFiles = async (path = '', allFiles = []) => {
  * Clean up old images from storage (older than 7 days)
  * This function deletes files that are older than the specified retention period
  */
+/**
+ * Serve images from storage bucket (proxy endpoint)
+ * This allows serving images even if the bucket is private
+ */
+export const serveImage = async (req, res, next) => {
+  try {
+    const filePath = decodeURIComponent(req.params.path);
+    
+    if (!filePath) {
+      throw createError(400, 'File path is required');
+    }
+
+    // Download the file from Supabase storage
+    const { data, error } = await supabaseAdmin.storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .download(filePath);
+
+    if (error) {
+      console.error('Error downloading file:', error);
+      throw createError(404, 'File not found');
+    }
+
+    if (!data) {
+      throw createError(404, 'File not found');
+    }
+
+    // Convert blob to buffer
+    const arrayBuffer = await data.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Determine content type from file extension
+    const extension = filePath.split('.').pop()?.toLowerCase();
+    const contentTypeMap = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+    };
+    const contentType = contentTypeMap[extension] || 'application/octet-stream';
+
+    // Set headers and send file
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.send(buffer);
+  } catch (err) {
+    console.error('Serve image error:', err);
+    next(err);
+  }
+};
+
 export const cleanupOldImages = async (req, res, next) => {
   try {
     const retentionDays = 7; // Keep images for 7 days
@@ -170,15 +221,25 @@ export const uploadEvidence = async (req, res, next) => {
       throw createError(500, 'Upload succeeded but no file path returned');
     }
 
-    const { data: urlData } = supabaseAdmin.storage
+    // Generate signed URL (valid for 1 year) - works even if bucket is private
+    const { data: signedData, error: signedError } = await supabaseAdmin.storage
       .from(env.SUPABASE_STORAGE_BUCKET)
-      .getPublicUrl(data.path);
+      .createSignedUrl(data.path, 31536000); // 1 year in seconds
 
-    if (!urlData || !urlData.publicUrl) {
-      throw createError(500, 'Failed to generate public URL for uploaded file');
+    if (signedError || !signedData?.signedUrl) {
+      // Fallback to public URL if signed URL fails
+      const { data: urlData } = supabaseAdmin.storage
+        .from(env.SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl(data.path);
+      
+      if (urlData && urlData.publicUrl) {
+        res.status(201).json({ file_url: urlData.publicUrl });
+      } else {
+        throw createError(500, `Failed to generate URL for uploaded file: ${signedError?.message || 'Unknown error'}`);
+      }
+    } else {
+      res.status(201).json({ file_url: signedData.signedUrl });
     }
-
-    res.status(201).json({ file_url: urlData.publicUrl });
   } catch (err) {
     console.error('Upload evidence error:', err);
     next(err);
