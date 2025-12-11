@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const inactivityTimerRef = useRef(null);
 
   // Set up activity listeners and inactivity timer
@@ -103,10 +104,12 @@ export function AuthProvider({ children }) {
         } else if (isPasswordReset) {
           console.log('🔐 Password reset flow detected - preserving recovery session');
           // Don't clear the session if it's a password reset
+          setIsPasswordRecovery(true);
           setSession(data.session);
         } else {
           setSession(null);
           setProfile(null);
+          setIsPasswordRecovery(false);
         }
       } catch (err) {
         console.error('Error during session initialization:', err);
@@ -140,9 +143,14 @@ export function AuthProvider({ children }) {
       } else if (event === 'PASSWORD_RECOVERY' || (newSession && isPasswordReset)) {
         // Preserve recovery sessions for password reset
         console.log('🔐 Password recovery session detected');
+        setIsPasswordRecovery(true);
         setSession(newSession);
       } else {
         setSession(newSession);
+        // Clear recovery flag on other auth events
+        if (event !== 'TOKEN_REFRESHED') {
+          setIsPasswordRecovery(false);
+        }
       }
     });
 
@@ -157,6 +165,14 @@ export function AuthProvider({ children }) {
         setLoading(false);
         return;
       }
+      
+      // Don't load profile during password recovery - it's not needed and might cause redirects
+      if (isPasswordRecovery) {
+        console.log('🔐 Skipping profile load during password recovery');
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
         const user = await fetchCurrentUser();
@@ -168,6 +184,7 @@ export function AuthProvider({ children }) {
           console.log('🔒 Session expired or invalid - clearing session');
           setSession(null);
           setProfile(null);
+          setIsPasswordRecovery(false);
           await supabase.auth.signOut();
         } else {
           setError(err);
@@ -178,7 +195,7 @@ export function AuthProvider({ children }) {
       }
     };
     loadProfile();
-  }, [session]);
+  }, [session, isPasswordRecovery]);
 
   const value = useMemo(
     () => ({
@@ -186,7 +203,8 @@ export function AuthProvider({ children }) {
       profile,
       loading,
       error,
-      isAuthenticated: Boolean(session && profile),
+      isAuthenticated: Boolean(session && profile && !isPasswordRecovery),
+      isPasswordRecovery,
       signOut: () => supabase.auth.signOut(),
       signInWithPassword: async (email, password) => {
         console.log('🔐 Signing in with email and password');

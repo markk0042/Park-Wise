@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { Shield, Lock, KeyRound } from 'lucide-react';
 
 export default function Login() {
-  const { signInWithPassword, resetPassword } = useAuth();
+  const { signInWithPassword, resetPassword, isPasswordRecovery } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -259,10 +259,12 @@ export default function Login() {
       setConfirmPassword('');
       setIsResettingPasswordForm(false);
       
-      // Sign out the user so they sign in with new password
+      // Clear the recovery flag and sign out the user so they sign in with new password
       setTimeout(async () => {
         console.log('🔓 Signing out after password reset...');
         await supabase.auth.signOut();
+        // Clear any recovery state
+        window.history.replaceState(null, '', window.location.pathname);
       }, 2000);
       
     } catch (err) {
