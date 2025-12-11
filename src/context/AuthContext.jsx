@@ -84,18 +84,26 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const init = async () => {
+      // Check if this is a password reset flow (recovery session)
+      const hash = window.location.hash;
+      const isPasswordReset = hash && hash.includes('type=recovery');
+      
       // Force users to sign in - clear any existing session on app load
-      // This ensures every user must sign in when the app loads
+      // BUT preserve recovery sessions for password reset
       try {
         const { data } = await supabase.auth.getSession();
         
-        if (data.session) {
+        if (data.session && !isPasswordReset) {
           console.log('🔒 Clearing existing session - user must sign in');
           // Set session to null first to prevent API calls
           setSession(null);
           setProfile(null);
           // Then sign out
           await supabase.auth.signOut();
+        } else if (isPasswordReset) {
+          console.log('🔐 Password reset flow detected - preserving recovery session');
+          // Don't clear the session if it's a password reset
+          setSession(data.session);
         } else {
           setSession(null);
           setProfile(null);
@@ -113,6 +121,10 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      // Check if this is a password reset flow
+      const hash = window.location.hash;
+      const isPasswordReset = hash && hash.includes('type=recovery');
+      
       // When user signs in, set the session and start the timer
       if (event === 'SIGNED_IN' && newSession) {
         console.log('✅ User signed in - starting inactivity timer');
@@ -125,6 +137,10 @@ export function AuthProvider({ children }) {
           clearTimeout(inactivityTimerRef.current);
           inactivityTimerRef.current = null;
         }
+      } else if (event === 'PASSWORD_RECOVERY' || (newSession && isPasswordReset)) {
+        // Preserve recovery sessions for password reset
+        console.log('🔐 Password recovery session detected');
+        setSession(newSession);
       } else {
         setSession(newSession);
       }

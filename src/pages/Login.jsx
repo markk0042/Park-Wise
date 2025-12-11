@@ -22,51 +22,95 @@ export default function Login() {
   const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
-  // Check for password reset token in URL hash
+  // Check for password reset token in URL hash - MUST run immediately on mount
   useEffect(() => {
     const checkPasswordResetToken = async () => {
       // Check URL hash for access_token (Supabase password reset)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const hash = window.location.hash;
+      console.log('🔍 [Login] Checking URL hash for reset token:', hash ? 'Hash found' : 'No hash');
+      
+      if (!hash || !hash.includes('access_token')) {
+        console.log('🔍 [Login] No reset token in hash');
+        return;
+      }
+      
+      const hashParams = new URLSearchParams(hash.substring(1));
       const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
       const type = hashParams.get('type');
+      
+      console.log('📧 [Login] Reset token detected:', { 
+        hasToken: !!accessToken, 
+        type,
+        hasRefreshToken: !!refreshToken 
+      });
       
       if (accessToken && type === 'recovery') {
         // User came from password reset email
+        console.log('✅ [Login] Password reset token found, setting up recovery session...');
+        
+        // Show the form immediately to prevent AuthContext from clearing
         setIsResettingPasswordForm(true);
         setStatus({ 
-          type: 'success', 
-          message: 'Please enter your new password below.' 
+          type: 'info', 
+          message: 'Processing reset link...' 
         });
         
-        // Clear the hash from URL
-        window.history.replaceState(null, '', window.location.pathname);
-        
-        // Exchange the token for a session
+        // Exchange the token for a session FIRST, before clearing hash
         try {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
-            refresh_token: hashParams.get('refresh_token') || '',
+            refresh_token: refreshToken || '',
           });
           
           if (error) {
-            console.error('Error setting session:', error);
+            console.error('❌ [Login] Error setting session:', error);
             setStatus({ 
               type: 'error', 
-              message: 'Invalid or expired reset link. Please request a new password reset.' 
+              message: `Invalid or expired reset link: ${error.message}. Please request a new password reset.` 
             });
             setIsResettingPasswordForm(false);
+            // Clear the hash even on error
+            window.history.replaceState(null, '', window.location.pathname);
+            return;
           }
+          
+          console.log('✅ [Login] Session set successfully, showing password reset form');
+          
+          // Verify session is still valid
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          if (!currentSession) {
+            throw new Error('Session was cleared. Please request a new password reset.');
+          }
+          
+          // Only clear hash after successful session setup
+          window.history.replaceState(null, '', window.location.pathname);
+          setStatus({ 
+            type: 'success', 
+            message: 'Please enter your new password below.' 
+          });
         } catch (err) {
-          console.error('Error processing reset token:', err);
+          console.error('❌ [Login] Error processing reset token:', err);
           setStatus({ 
             type: 'error', 
-            message: 'Invalid or expired reset link. Please request a new password reset.' 
+            message: `Failed to process reset link: ${err.message}. Please request a new password reset.` 
           });
           setIsResettingPasswordForm(false);
+          window.history.replaceState(null, '', window.location.pathname);
         }
+      } else if (hash.includes('error')) {
+        // Handle error from Supabase
+        const errorDescription = hashParams.get('error_description') || hashParams.get('error');
+        console.error('❌ [Login] Error in reset link:', errorDescription);
+        setStatus({ 
+          type: 'error', 
+          message: `Reset link error: ${errorDescription || 'Invalid link'}. Please request a new password reset.` 
+        });
+        window.history.replaceState(null, '', window.location.pathname);
       }
     };
     
+    // Run immediately - don't delay, we need to process before AuthContext clears session
     checkPasswordResetToken();
   }, []);
 
@@ -184,14 +228,26 @@ export default function Login() {
     }
     
     try {
+      // Check if we have a valid session first
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('No active session. The reset link may have expired. Please request a new password reset.');
+      }
+      
+      console.log('✅ Session found, updating password...');
+      
       // Update the password using Supabase
       const { data, error } = await supabase.auth.updateUser({
         password: newPassword
       });
       
       if (error) {
+        console.error('❌ Password update error:', error);
         throw error;
       }
+      
+      console.log('✅ Password updated successfully');
       
       setStatus({ 
         type: 'success', 
@@ -203,13 +259,14 @@ export default function Login() {
       setConfirmPassword('');
       setIsResettingPasswordForm(false);
       
-      // Optionally sign out the user so they sign in with new password
+      // Sign out the user so they sign in with new password
       setTimeout(async () => {
+        console.log('🔓 Signing out after password reset...');
         await supabase.auth.signOut();
       }, 2000);
       
     } catch (err) {
-      console.error('Password update error:', err);
+      console.error('❌ Password update error:', err);
       setStatus({ 
         type: 'error', 
         message: err.message || 'Failed to update password. The reset link may have expired. Please request a new one.' 
