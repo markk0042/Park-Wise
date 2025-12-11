@@ -4,14 +4,80 @@ import { env } from '../config/env.js';
 const COMPLAINT_TABLE = 'complaints';
 
 /**
+ * Search for a file in storage by filename
+ * This searches through user folders to find files that match the filename
+ */
+const findFileByFilename = async (filename) => {
+  try {
+    // List folders in the bucket (user IDs)
+    const { data: folders, error: listError } = await supabaseAdmin.storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .list('', {
+        limit: 100,
+        sortBy: { column: 'name', order: 'asc' }
+      });
+
+    if (listError) {
+      console.error('Error listing storage folders:', listError);
+      return null;
+    }
+
+    if (!folders || folders.length === 0) {
+      return null;
+    }
+
+    // Search through folders (user IDs) - limit to first 100 folders for performance
+    // Process in parallel for better performance
+    const searchPromises = folders
+      .filter(folder => !folder.id) // Only check folders, not files
+      .slice(0, 100) // Limit to first 100 folders
+      .map(async (folder) => {
+        try {
+          const { data: files, error: filesError } = await supabaseAdmin.storage
+            .from(env.SUPABASE_STORAGE_BUCKET)
+            .list(folder.name, {
+              limit: 1000
+            });
+
+          if (filesError) return null;
+
+          // Check if any file matches the filename
+          const matchingFile = files?.find(file => file.name === filename);
+          if (matchingFile) {
+            return `${folder.name}/${filename}`;
+          }
+        } catch (err) {
+          // Skip errors for individual folders
+        }
+        return null;
+      });
+
+    const results = await Promise.all(searchPromises);
+    const foundPath = results.find(path => path !== null);
+    
+    return foundPath || null;
+  } catch (error) {
+    console.error('Error searching for file:', error);
+    return null;
+  }
+};
+
+/**
  * Extract file path from various URL formats
  */
-const extractFilePath = (url) => {
+const extractFilePath = async (url) => {
   if (!url) return null;
   
-  // If it's already a path (no http/https), return as-is
+  // If it's already a path (no http/https), check if it's a full path or just filename
   if (!url.startsWith('http')) {
-    return url;
+    // If it contains a slash, it's likely a full path (userId/filename)
+    if (url.includes('/')) {
+      return url;
+    }
+    // If it's just a filename, search for it
+    console.log('Searching for file by filename:', url);
+    const foundPath = await findFileByFilename(url);
+    return foundPath;
   }
   
   // Extract path from Supabase storage URLs
@@ -23,14 +89,16 @@ const extractFilePath = (url) => {
     return path;
   }
   
-  // Try to extract from any URL ending with .jpg, .jpeg, .png, etc.
-  // This handles cases where the URL might be malformed
+  // Try to extract filename from any URL ending with .jpg, .jpeg, .png, etc.
   const fileMatch = url.match(/\/([^\/]+\.(jpg|jpeg|png|gif|webp))(?:\?|$)/i);
   if (fileMatch) {
-    // If it's just a filename without user ID, we can't reconstruct the full path
-    // Return null so we know we can't regenerate
-    console.warn('Cannot extract full path from URL (missing user ID):', url);
-    return null;
+    const filename = fileMatch[1];
+    // If it looks like just a filename (UUID format), search for it
+    if (filename.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|jpeg|png|gif|webp)$/i)) {
+      console.log('Detected UUID filename, searching for file:', filename);
+      const foundPath = await findFileByFilename(filename);
+      return foundPath;
+    }
   }
   
   return null;
@@ -69,7 +137,7 @@ const regenerateImageUrl = async (imageUrl) => {
   }
   
   // Try to extract path and generate new signed URL
-  const filePath = extractFilePath(imageUrl);
+  const filePath = await extractFilePath(imageUrl);
   if (filePath) {
     try {
       const { data: signedData, error } = await supabaseAdmin.storage

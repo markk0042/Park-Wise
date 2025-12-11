@@ -22,6 +22,13 @@ export function getImageUrl(url) {
     return `${API_BASE_URL}${url}`;
   }
   
+  // If it's just a filename (no slashes, no protocol), it's likely a broken URL
+  // Return null so the image error handler can show a fallback
+  if (!url.includes('/') && !url.includes(':')) {
+    console.warn('Invalid image URL format (filename only):', url);
+    return null; // Return null to trigger error handling
+  }
+  
   // Return as-is if it's something else
   return url;
 } 
