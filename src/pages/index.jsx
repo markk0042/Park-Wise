@@ -26,6 +26,8 @@ import YellowCarPark from "./YellowCarPark";
 
 import DeleteAllVehicles from "./DeleteAllVehicles";
 
+import TrendAnalysis from "./TrendAnalysis";
+
 import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
 import { Clock, XCircle } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -55,6 +57,8 @@ const PAGES = {
     YellowCarPark: YellowCarPark,
     
     DeleteAllVehicles: DeleteAllVehicles,
+    
+    TrendAnalysis: TrendAnalysis,
     
 }
 
@@ -253,6 +257,15 @@ function PagesContent() {
                     element={
                         <ProtectedRoute requireAdmin={true}>
                             <DeleteAllVehicles />
+                        </ProtectedRoute>
+                    } 
+                />
+                
+                <Route 
+                    path="/TrendAnalysis" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <TrendAnalysis />
                         </ProtectedRoute>
                     } 
                 />

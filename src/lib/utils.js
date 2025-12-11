@@ -1,8 +1,26 @@
 import { clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { format } from "date-fns"
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs))
+}
+
+/**
+ * Safely format a date value, returning a fallback if the date is invalid
+ */
+export function safeFormatDate(dateValue, formatString, fallback = 'N/A') {
+  if (!dateValue) return fallback;
+  try {
+    const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+    if (isNaN(date.getTime())) {
+      return fallback;
+    }
+    return format(date, formatString);
+  } catch (error) {
+    console.error('Date formatting error:', error, dateValue);
+    return fallback;
+  }
 }
 
 /**

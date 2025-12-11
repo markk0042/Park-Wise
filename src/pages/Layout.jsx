@@ -2,7 +2,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, Database, FileText, Menu, X, AlertCircle, Upload } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, Database, FileText, Menu, X, AlertCircle, Upload, TrendingUp } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -79,6 +79,12 @@ function LayoutContent({ children, currentPageName }) {
       title: "Generate Reports",
       url: createPageUrl("Reports"),
       icon: FileText,
+    });
+
+    navigationItems.push({
+      title: "KPI Trend Analysis",
+      url: createPageUrl("TrendAnalysis"),
+      icon: TrendingUp,
     });
 
     navigationItems.push({
