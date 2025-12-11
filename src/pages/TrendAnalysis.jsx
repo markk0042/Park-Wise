@@ -361,7 +361,7 @@ export default function TrendAnalysis() {
 
         {/* Yellow and Red Registrations */}
         {yellowAndRedLogs.length > 0 && (
-          <Card className="shadow-lg print-content">
+          <Card className="shadow-lg print-hide-registrations">
             <CardHeader>
               <CardTitle>Yellow and Red Registrations ({yellowAndRedLogs.length})</CardTitle>
               <p className="text-sm text-slate-600 mt-1">
@@ -459,6 +459,12 @@ export default function TrendAnalysis() {
           .grid.grid-cols-2.md\\:grid-cols-4,
           .shadow-md:has(input[type="date"]) {
             display: none !important;
+          }
+          
+          /* Hide registrations table in print */
+          .print-hide-registrations {
+            display: none !important;
+            visibility: hidden !important;
           }
           
           /* Ensure chart container and all its children are visible */
