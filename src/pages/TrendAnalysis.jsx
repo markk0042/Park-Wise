@@ -196,7 +196,7 @@ export default function TrendAnalysis() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 print-wrapper">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="mb-6 print-content">
@@ -311,8 +311,8 @@ export default function TrendAnalysis() {
                 No data available for the selected date range
               </div>
             ) : (
-              <div className="print-chart-container">
-                <ResponsiveContainer width="100%" height={400} className="print:!h-[500px]">
+              <div className="print-chart-container" id="trend-chart-print">
+                <ResponsiveContainer width="100%" height={400}>
                   <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis 
@@ -436,20 +436,35 @@ export default function TrendAnalysis() {
             size: A4;
           }
           
-          body * {
-            visibility: hidden;
-          }
-          
-          .print-content, 
-          .print-content * {
+          /* Reset body visibility */
+          body {
             visibility: visible !important;
           }
           
+          /* Hide everything except print content */
+          body > *:not(.print-wrapper) {
+            display: none !important;
+          }
+          
+          /* Show print wrapper */
+          .print-wrapper {
+            display: block !important;
+            visibility: visible !important;
+            position: relative !important;
+            width: 100% !important;
+            left: 0 !important;
+            top: 0 !important;
+            background: white !important;
+          }
+          
+          /* Show print content */
           .print-content {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
+            display: block !important;
+            visibility: visible !important;
+            position: relative !important;
+            width: 100% !important;
+            page-break-inside: avoid;
+            background: white !important;
           }
           
           /* Hide non-print elements */
@@ -465,41 +480,95 @@ export default function TrendAnalysis() {
             visibility: hidden !important;
           }
           
-          /* Ensure chart is visible and properly rendered */
-          .print-chart-container {
-            visibility: visible !important;
+          /* CRITICAL: Force all chart elements to be visible and rendered */
+          #trend-chart-print,
+          #trend-chart-print * {
             display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+          }
+          
+          .print-chart-container {
+            display: block !important;
+            visibility: visible !important;
             width: 100% !important;
-            height: auto !important;
+            height: 500px !important;
+            min-height: 500px !important;
+            max-height: 500px !important;
             page-break-inside: avoid;
             margin-bottom: 20px;
+            overflow: visible !important;
+            background: white !important;
           }
           
-          .print-chart-container .recharts-wrapper,
-          .print-chart-container .recharts-surface,
-          .print-chart-container svg {
-            visibility: visible !important;
+          /* Force Recharts wrapper to be visible */
+          .print-chart-container .recharts-wrapper {
             display: block !important;
+            visibility: visible !important;
             width: 100% !important;
-            height: auto !important;
-            max-width: 100% !important;
+            height: 500px !important;
+            position: relative !important;
           }
           
-          /* Ensure chart elements are visible */
-          .recharts-cartesian-grid,
-          .recharts-cartesian-axis,
-          .recharts-line,
-          .recharts-line-dot,
-          .recharts-legend-wrapper,
-          .recharts-tooltip-wrapper {
-            visibility: visible !important;
+          /* Force SVG to be visible and properly sized */
+          .print-chart-container svg,
+          .print-chart-container .recharts-surface {
             display: block !important;
+            visibility: visible !important;
+            width: 100% !important;
+            height: 500px !important;
+            max-width: 100% !important;
+            overflow: visible !important;
+            position: relative !important;
+          }
+          
+          /* Force all SVG child elements to be visible */
+          .print-chart-container svg * {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+          }
+          
+          /* Ensure lines are visible with proper stroke */
+          .print-chart-container .recharts-line path {
+            stroke-width: 2 !important;
+            fill: none !important;
+            display: block !important;
+            visibility: visible !important;
+          }
+          
+          /* Ensure grid lines are visible */
+          .print-chart-container .recharts-cartesian-grid line {
+            stroke: #e5e7eb !important;
+            stroke-width: 1 !important;
+            display: block !important;
+            visibility: visible !important;
+          }
+          
+          /* Ensure axis labels are visible */
+          .print-chart-container .recharts-cartesian-axis text {
+            fill: #000 !important;
+            font-size: 12px !important;
+            display: block !important;
+            visibility: visible !important;
+          }
+          
+          /* Ensure legend is visible */
+          .print-chart-container .recharts-legend-wrapper {
+            display: block !important;
+            visibility: visible !important;
+          }
+          
+          /* Hide tooltip in print */
+          .print-chart-container .recharts-tooltip-wrapper {
+            display: none !important;
           }
           
           /* Style for registrations table */
           .print-content table {
             page-break-inside: auto;
             margin-top: 20px;
+            width: 100%;
           }
           
           .print-content tr {
