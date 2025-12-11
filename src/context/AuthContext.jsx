@@ -66,7 +66,8 @@ export function AuthProvider({ children }) {
       window.addEventListener(event, handleActivity, true);
     });
 
-    // Initialize timer
+    // Initialize timer immediately when user is authenticated
+    console.log('⏱️ Starting inactivity timer (60 minutes)');
     resetInactivityTimer();
 
     // Cleanup
@@ -83,16 +84,40 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const init = async () => {
+      // Check for existing session
       const { data } = await supabase.auth.getSession();
-      setSession(data.session);
+      
+      // Force users to sign in - clear any existing session on app load
+      // This ensures every user must sign in when the app loads
+      if (data.session) {
+        console.log('🔒 Clearing existing session - user must sign in');
+        await supabase.auth.signOut();
+        setSession(null);
+      } else {
+        setSession(null);
+      }
       setLoading(false);
     };
     init();
 
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      // When user signs in, set the session and start the timer
+      if (event === 'SIGNED_IN' && newSession) {
+        console.log('✅ User signed in - starting inactivity timer');
+        setSession(newSession);
+      } else if (event === 'SIGNED_OUT') {
+        console.log('👋 User signed out');
+        setSession(null);
+        // Clear any timers
+        if (inactivityTimerRef.current) {
+          clearTimeout(inactivityTimerRef.current);
+          inactivityTimerRef.current = null;
+        }
+      } else {
+        setSession(newSession);
+      }
     });
 
     return () => subscription.unsubscribe();
