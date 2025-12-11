@@ -84,19 +84,29 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const init = async () => {
-      // Check for existing session
-      const { data } = await supabase.auth.getSession();
-      
       // Force users to sign in - clear any existing session on app load
       // This ensures every user must sign in when the app loads
-      if (data.session) {
-        console.log('🔒 Clearing existing session - user must sign in');
-        await supabase.auth.signOut();
+      try {
+        const { data } = await supabase.auth.getSession();
+        
+        if (data.session) {
+          console.log('🔒 Clearing existing session - user must sign in');
+          // Set session to null first to prevent API calls
+          setSession(null);
+          setProfile(null);
+          // Then sign out
+          await supabase.auth.signOut();
+        } else {
+          setSession(null);
+          setProfile(null);
+        }
+      } catch (err) {
+        console.error('Error during session initialization:', err);
         setSession(null);
-      } else {
-        setSession(null);
+        setProfile(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     init();
 
@@ -137,8 +147,16 @@ export function AuthProvider({ children }) {
         setProfile(user);
         setError(null);
       } catch (err) {
-        setError(err);
-        setProfile(null);
+        // Handle 401 errors gracefully (session expired or invalid)
+        if (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+          console.log('🔒 Session expired or invalid - clearing session');
+          setSession(null);
+          setProfile(null);
+          await supabase.auth.signOut();
+        } else {
+          setError(err);
+          setProfile(null);
+        }
       } finally {
         setLoading(false);
       }
