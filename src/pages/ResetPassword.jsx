@@ -30,49 +30,29 @@ export default function ResetPasswordPage() {
         handled = true;
         console.log('✅ Password update confirmed via USER_UPDATED event');
         
-        // Stop the loading spinner immediately
-        setIsUpdating(false);
+        // Mark as complete FIRST to prevent any re-submissions
         setPasswordUpdateSuccess(true);
+        setIsUpdating(false);
         
-        // Set success status
+        // Mark that password reset is complete (to prevent auto-login)
+        sessionStorage.setItem('password_reset_complete', 'true');
+
+        // Sign out (fire-and-forget, don't wait)
+        supabase.auth.signOut().catch(err => {
+          console.warn('Sign out error (non-critical):', err);
+        });
+
+        // Clear tokens
+        setRecoveryTokens(null);
+
+        // Set success message (briefly visible before redirect)
         setStatus({
           type: "success",
           message: "Password updated successfully! Redirecting to login..."
         });
 
-        // Mark that password reset is complete (to prevent auto-login)
-        sessionStorage.setItem('password_reset_complete', 'true');
-
-        // Sign out immediately and wait for it to complete
-        try {
-          console.log('🔐 Signing out after password reset...');
-          await supabase.auth.signOut();
-          console.log('✅ Signed out successfully');
-        } catch (err) {
-          console.warn('Sign out error (non-critical):', err);
-        }
-
-        // Clear any remaining tokens
-        setRecoveryTokens(null);
-
-        // Call backend to sync (fire-and-forget, endpoint might not exist)
-        const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
-        if (recoveryTokens?.access_token) {
-          fetch(`${backendUrl}/auth/sync-password-reset`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${recoveryTokens.access_token}`,
-            },
-            body: JSON.stringify({ password_reset: true }),
-          }).catch(() => {
-            // Silently ignore - endpoint doesn't exist
-          });
-        }
-
-        // Redirect to login immediately (don't wait)
-        console.log('🔐 Redirecting to login...');
-        // Use window.location for a hard redirect to ensure it works
+        // Redirect IMMEDIATELY - don't wait for anything
+        console.log('🔐 Redirecting to login immediately...');
         window.location.href = '/login';
       }
     });
@@ -83,6 +63,11 @@ export default function ResetPasswordPage() {
   }, [isUpdating, recoveryTokens, navigate]);
 
   useEffect(() => {
+    // Don't extract tokens if password update is already complete
+    if (passwordUpdateSuccess) {
+      return;
+    }
+    
     // Extract tokens from URL hash BEFORE doing anything else
     // We need to capture these immediately as they might be cleared
     const hash = window.location.hash;
@@ -134,10 +119,17 @@ export default function ResetPasswordPage() {
         message: "Invalid or expired reset link. Please request a new password reset."
       });
     }
-  }, []);
+  }, [passwordUpdateSuccess]);
 
   async function handleReset(e) {
     e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (isUpdating || passwordUpdateSuccess) {
+      console.log('⚠️ Already updating or completed - ignoring submission');
+      return;
+    }
+    
     setIsUpdating(true);
     setStatus({ type: null, message: "" });
 
@@ -160,6 +152,12 @@ export default function ResetPasswordPage() {
     }
 
     try {
+      // Double-check: prevent if already completed
+      if (passwordUpdateSuccess) {
+        console.log('⚠️ Password already updated - ignoring submission');
+        return;
+      }
+      
       // Check if we have recovery tokens stored
       if (!recoveryTokens || !recoveryTokens.access_token) {
         throw new Error("Invalid or expired reset link. Please request a new password reset.");
@@ -366,7 +364,7 @@ export default function ResetPasswordPage() {
             <Button
               type="submit"
               className="w-full h-11"
-              disabled={isUpdating || !recoveryTokens}
+              disabled={isUpdating || !recoveryTokens || passwordUpdateSuccess}
             >
               {isUpdating ? (
                 <>
