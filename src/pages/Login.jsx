@@ -12,10 +12,15 @@ import { Shield, Lock, KeyRound } from 'lucide-react';
 export default function Login() {
   const { signInWithPassword, resetPassword, resetPasswordWithToken } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const resetType = searchParams.get('type'); // Supabase uses ?type=recovery
   
-  // Check if we're in password recovery mode (Supabase sends this in URL)
-  const shouldShowResetForm = resetType === 'recovery' || window.location.hash.includes('type=recovery');
+  // Check if we're in password recovery mode (Supabase sends this in URL hash)
+  const checkRecoveryMode = () => {
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const type = hashParams.get('type');
+    return type === 'recovery';
+  };
+  
+  const [isRecoveryMode, setIsRecoveryMode] = useState(checkRecoveryMode());
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +30,7 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(shouldShowResetForm);
+  const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(isRecoveryMode);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Check for session expiration
@@ -41,22 +46,74 @@ export default function Login() {
     }
   }, []);
 
-  // Check for Supabase password recovery in URL
+  // Check for Supabase password recovery in URL hash
   useEffect(() => {
-    // Supabase puts recovery info in URL hash
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const type = hashParams.get('type');
+    const checkHash = () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const type = hashParams.get('type');
+      const accessToken = hashParams.get('access_token');
+      
+      if (type === 'recovery') {
+        console.log('✅ [Login] Password recovery mode detected in URL hash');
+        console.log('   Access token present:', !!accessToken);
+        // Set recovery mode and form state - this should persist
+        setIsRecoveryMode(true);
+        setIsResettingPasswordForm(true);
+        setStatus({ 
+          type: 'success', 
+          message: 'Please enter your new password below.' 
+        });
+        return true;
+      }
+      return false;
+    };
+
+    // Check immediately on mount
+    const wasRecovery = checkHash();
     
-    if (type === 'recovery' || shouldShowResetForm) {
-      console.log('✅ [Login] Password recovery mode detected');
-      setIsResettingPasswordForm(true);
-      setStatus({ 
-        type: 'success', 
-        message: 'Please enter your new password below.' 
-      });
+    // If we found recovery mode, don't set up listeners (form should stay visible)
+    if (wasRecovery) {
+      console.log('🔒 Locking form in recovery mode');
+      return;
     }
-  }, [shouldShowResetForm]);
+
+    // Also listen for hash changes (in case it loads after component mounts)
+    const handleHashChange = () => {
+      if (checkHash()) {
+        // Once recovery mode is detected, stop listening
+        window.removeEventListener('hashchange', handleHashChange);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    
+    // Check again after delays (in case Supabase hasn't set the hash yet)
+    const timeout1 = setTimeout(() => {
+      if (checkHash()) {
+        window.removeEventListener('hashchange', handleHashChange);
+      }
+    }, 100);
+    
+    const timeout2 = setTimeout(() => {
+      if (checkHash()) {
+        window.removeEventListener('hashchange', handleHashChange);
+      }
+    }, 500);
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+    };
+  }, []);
+  
+  // Prevent form from disappearing once recovery mode is set
+  useEffect(() => {
+    if (isRecoveryMode && !isResettingPasswordForm) {
+      console.log('⚠️ Recovery mode detected but form was hidden - restoring form');
+      setIsResettingPasswordForm(true);
+    }
+  }, [isRecoveryMode, isResettingPasswordForm]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -204,19 +261,19 @@ export default function Login() {
             )}
           </div>
           <CardTitle className="text-2xl font-bold text-slate-900">
-            {(isResettingPasswordForm || shouldShowResetForm) ? 'Reset Your Password' : 'ParkingLog Access'}
+            {isResettingPasswordForm ? 'Reset Your Password' : 'ParkingLog Access'}
           </CardTitle>
         </CardHeader>
-        <form onSubmit={(isResettingPasswordForm || shouldShowResetForm) ? handlePasswordUpdate : handleSubmit}>
+        <form onSubmit={isResettingPasswordForm ? handlePasswordUpdate : handleSubmit}>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-600 text-center">
-              {(isResettingPasswordForm || shouldShowResetForm)
+              {isResettingPasswordForm
                 ? 'Enter your new password below. Make sure it\'s at least 6 characters long.'
                 : showForgotPassword 
                   ? 'Enter your registered email to receive a password reset link.'
                   : 'Enter your email and password to sign in.'}
             </p>
-            {(isResettingPasswordForm || shouldShowResetForm) ? (
+            {isResettingPasswordForm ? (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="newPassword" className="text-sm font-semibold text-slate-700">
@@ -294,7 +351,7 @@ export default function Login() {
             )}
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            {(isResettingPasswordForm || shouldShowResetForm) ? (
+            {isResettingPasswordForm ? (
               <>
                 <Button type="submit" className="w-full h-11" disabled={isUpdatingPassword}>
                   {isUpdatingPassword ? (
