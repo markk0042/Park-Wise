@@ -172,36 +172,44 @@ export default function ResetPasswordPage() {
 
       console.log('✅ Password updated successfully');
 
+      // Stop the loading spinner immediately - don't wait for anything else
+      setIsUpdating(false);
+
       setStatus({
         type: "success",
-        message: "Password updated successfully! Signing you out..."
+        message: "Password updated successfully! Redirecting to login..."
       });
 
-      // Call backend to sync password update (optional - if you want to track it)
-      try {
-        const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
-        const session = await supabase.auth.getSession();
-        if (session.data.session?.access_token) {
-          await fetch(`${backendUrl}/auth/sync-password-reset`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.data.session.access_token}`,
-            },
-            body: JSON.stringify({ password_reset: true }),
-          });
-        }
-      } catch (backendError) {
-        console.warn("Backend sync failed (non-critical):", backendError);
-      }
+      // Sign out (don't await - AuthContext will also handle this on USER_UPDATED)
+      supabase.auth.signOut().catch(err => {
+        console.warn('Sign out error (non-critical):', err);
+      });
 
-      // Sign out to force re-login with new password
-      await supabase.auth.signOut();
+      // Call backend to sync password update (fire-and-forget with timeout)
+      // This endpoint might not exist, so we use a timeout to prevent hanging
+      const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      fetch(`${backendUrl}/auth/sync-password-reset`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${recoveryTokens.access_token}`,
+        },
+        body: JSON.stringify({ password_reset: true }),
+        signal: controller.signal,
+      })
+        .then(() => clearTimeout(timeoutId))
+        .catch(backendError => {
+          clearTimeout(timeoutId);
+          // Silently ignore - this endpoint might not exist
+        });
 
-      // Redirect to login after a short delay
+      // Redirect to login after showing success message
       setTimeout(() => {
         navigate("/login");
-      }, 2000);
+      }, 1500);
     } catch (err) {
       console.error("Password reset error:", err);
       setStatus({
