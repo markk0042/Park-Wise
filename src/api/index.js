@@ -25,6 +25,10 @@ export const deleteUser = async (id) => {
   const result = await httpClient.delete(`/auth/users/${id}`);
   return result;
 };
+export const adminResetUserPassword = async (userId, password) => {
+  const result = await httpClient.post(`/auth/users/${userId}/reset-password`, { password });
+  return result;
+};
 export const checkEmailExists = async (email) => {
   const { exists } = await httpClient.post('/auth/check-email', { email });
   return exists;

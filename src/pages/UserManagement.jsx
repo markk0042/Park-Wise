@@ -10,9 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, XCircle, Clock, Shield, User, Users, UserPlus, Trash2 } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Shield, User, Users, UserPlus, Trash2, KeyRound } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { listUsers, updateUser as updateUserApi, inviteUser as inviteUserApi, deleteUser as deleteUserApi } from "@/api";
+import { listUsers, updateUser as updateUserApi, inviteUser as inviteUserApi, deleteUser as deleteUserApi, adminResetUserPassword } from "@/api";
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
@@ -20,6 +20,12 @@ export default function UserManagement() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'user', status: 'approved' });
   const [inviteError, setInviteError] = useState('');
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [resetPasswordUserId, setResetPasswordUserId] = useState(null);
+  const [resetPasswordEmail, setResetPasswordEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState('');
 
   // Check if current user is super admin (you can set your email here or via env)
   const SUPER_ADMIN_EMAIL = import.meta.env.VITE_SUPER_ADMIN_EMAIL || 'markk0042@gmail.com';
@@ -65,6 +71,56 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['allUsers'] });
     },
   });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ userId, password }) => adminResetUserPassword(userId, password),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allUsers'] });
+      setResetPasswordDialogOpen(false);
+      setResetPasswordUserId(null);
+      setResetPasswordEmail('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setResetPasswordError('');
+    },
+    onError: (error) => {
+      setResetPasswordError(error.message || 'Failed to reset password');
+    },
+  });
+
+  const handleResetPassword = (userId, email) => {
+    setResetPasswordUserId(userId);
+    setResetPasswordEmail(email);
+    setNewPassword('');
+    setConfirmPassword('');
+    setResetPasswordError('');
+    setResetPasswordDialogOpen(true);
+  };
+
+  const handleResetPasswordSubmit = (e) => {
+    e.preventDefault();
+    setResetPasswordError('');
+
+    if (!newPassword || !confirmPassword) {
+      setResetPasswordError('Please enter and confirm the new password');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setResetPasswordError('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetPasswordError('Passwords do not match');
+      return;
+    }
+
+    resetPasswordMutation.mutate({
+      userId: resetPasswordUserId,
+      password: newPassword,
+    });
+  };
 
   const handleInvite = (e) => {
     e.preventDefault();
@@ -229,6 +285,70 @@ export default function UserManagement() {
           )}
         </div>
 
+        {/* Reset Password Dialog */}
+        <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset Password</DialogTitle>
+              <DialogDescription>
+                Reset password for {resetPasswordEmail}. The user will be able to log in with this new password immediately.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleResetPasswordSubmit}>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">New Password *</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min 6 characters)"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    required
+                    minLength={6}
+                  />
+                </div>
+                {resetPasswordError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{resetPasswordError}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setResetPasswordDialogOpen(false);
+                    setResetPasswordUserId(null);
+                    setResetPasswordEmail('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setResetPasswordError('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={resetPasswordMutation.isPending}>
+                  {resetPasswordMutation.isPending ? 'Resetting...' : 'Reset Password'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
             <Card className="shadow-md">
               <CardHeader className="pb-2 md:pb-3 px-4 md:px-6">
@@ -370,6 +490,18 @@ export default function UserManagement() {
                                     </Button>
                                   )}
                                 </>
+                              )}
+                              {/* Admin can reset any user's password */}
+                              {currentUser?.role === 'admin' && user.id !== currentUser.id && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleResetPassword(user.id, user.email)}
+                                  className="text-xs px-2 py-1 h-8 whitespace-nowrap border-blue-300 text-blue-700 hover:bg-blue-50"
+                                >
+                                  <KeyRound className="w-3 h-3 sm:mr-1" />
+                                  <span className="hidden sm:inline">Reset Password</span>
+                                </Button>
                               )}
                               {isSuperAdmin && user.id !== currentUser.id && (
                                 <Button
