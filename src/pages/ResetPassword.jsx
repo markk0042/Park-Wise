@@ -139,8 +139,42 @@ export default function ResetPasswordPage() {
         hasAccessToken: !!sessionPayload.access_token,
         hasRefreshToken: !!sessionPayload.refresh_token
       });
+      console.log('🔐 Calling setSession...');
       
-      const { data: sessionData, error: sessionError } = await supabase.auth.setSession(sessionPayload);
+      // Add timeout to prevent hanging
+      const sessionPromise = supabase.auth.setSession(sessionPayload);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => {
+          console.error('⏱️ Session setup timed out after 10 seconds');
+          reject(new Error('Session setup timed out. Please try again.'));
+        }, 10000)
+      );
+      
+      let sessionData, sessionError;
+      try {
+        console.log('🔐 Waiting for setSession response...');
+        const result = await Promise.race([sessionPromise, timeoutPromise]);
+        console.log('🔐 setSession response received:', {
+          hasData: !!result.data,
+          hasError: !!result.error,
+          hasSession: !!result.data?.session
+        });
+        sessionData = result.data;
+        sessionError = result.error;
+      } catch (err) {
+        console.error('🔐 setSession error caught:', err);
+        if (err.message?.includes('timed out')) {
+          throw err;
+        }
+        // If it's an error from setSession, extract it
+        if (err.error) {
+          sessionError = err.error;
+        } else if (err.message) {
+          throw err;
+        } else {
+          throw new Error('Failed to set session. Please try again.');
+        }
+      }
       
       if (sessionError) {
         console.error('❌ Session error:', sessionError);
@@ -161,13 +195,47 @@ export default function ResetPasswordPage() {
       console.log('✅ Session user ID:', sessionData.session.user?.id);
 
       // Update password using Supabase (requires active session)
-      const { error: updateError } = await supabase.auth.updateUser({ 
+      // Add timeout to prevent hanging
+      const updatePromise = supabase.auth.updateUser({ 
         password: password 
       });
+      const updateTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Password update timed out. Please try again.')), 15000)
+      );
+      
+      let updateError;
+      try {
+        const result = await Promise.race([updatePromise, updateTimeoutPromise]);
+        updateError = result.error;
+      } catch (err) {
+        if (err.message?.includes('timed out')) {
+          throw err;
+        }
+        // If it's an error from updateUser, extract it
+        if (err.error) {
+          updateError = err.error;
+        } else {
+          throw err;
+        }
+      }
 
       if (updateError) {
         console.error('❌ Password update error:', updateError);
-        throw updateError;
+        
+        // Provide user-friendly error messages
+        let errorMessage = updateError.message || 'Failed to update password. Please try again.';
+        
+        if (updateError.message?.includes('different from the old password')) {
+          errorMessage = 'The new password must be different from your current password. Please choose a different password.';
+        } else if (updateError.message?.includes('same as the old password')) {
+          errorMessage = 'The new password must be different from your current password. Please choose a different password.';
+        } else if (updateError.message?.includes('weak')) {
+          errorMessage = 'Password is too weak. Please choose a stronger password.';
+        } else if (updateError.message?.includes('expired') || updateError.message?.includes('invalid')) {
+          errorMessage = 'This reset link has expired or is invalid. Please request a new password reset.';
+        }
+        
+        throw new Error(errorMessage);
       }
 
       console.log('✅ Password updated successfully');
