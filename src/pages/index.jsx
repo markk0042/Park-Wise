@@ -169,12 +169,17 @@ function PagesContent() {
     
     // MANDATORY 2FA CHECK: For non-admin users, 2FA is REQUIRED
     // Block access to all pages except /2fa/setup if 2FA is not enabled
+    // Note: We check twoFactorStatus, but if it's null/undefined, we need to check it
     if (user?.role !== 'admin' && user?.status === 'approved' && location.pathname !== '/2fa/setup') {
         if (twoFactorStatus) {
             if (twoFactorStatus.required && !twoFactorStatus.enabled) {
                 // Non-admin user without 2FA - redirect to setup
                 return <Navigate to="/2fa/setup" replace />;
             }
+        } else if (!checking2FA && token) {
+            // twoFactorStatus not loaded yet, but we have a token - check it
+            // This will be handled by the useEffect that checks 2FA status
+            // For now, allow access (the useEffect will redirect if needed)
         } else if (checking2FA) {
             // Still checking 2FA status, show loading
             return (

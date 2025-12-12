@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { generate2FASecret, verify2FASetup, check2FAStatus, disable2FA } from '@/api';
 
 export default function TwoFactorSetup() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState('check'); // 'check', 'setup', 'verify', 'enabled'
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -77,6 +77,13 @@ export default function TwoFactorSetup() {
       await verify2FASetup(verificationCode);
       setIsEnabled(true);
       setStep('enabled');
+      // Refresh profile to update 2FA status in AuthContext
+      try {
+        await refreshProfile();
+      } catch (refreshError) {
+        console.error('Error refreshing profile after 2FA setup:', refreshError);
+        // Non-critical error, continue anyway
+      }
     } catch (err) {
       setError(err.message || 'Invalid code. Please try again.');
       setVerificationCode('');
@@ -181,7 +188,16 @@ export default function TwoFactorSetup() {
             <Button
               variant="ghost"
               className="w-full"
-              onClick={() => navigate('/Dashboard')}
+              onClick={async () => {
+                // Refresh profile first to ensure 2FA status is updated
+                try {
+                  await refreshProfile();
+                } catch (err) {
+                  console.error('Error refreshing profile:', err);
+                }
+                // Use window.location for a hard redirect to ensure routing works
+                window.location.href = '/Dashboard';
+              }}
             >
               Back to Dashboard
             </Button>
