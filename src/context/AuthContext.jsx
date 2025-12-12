@@ -99,7 +99,6 @@ export function AuthProvider({ children }) {
       // Also ignore SIGNED_IN events right after password reset (prevent auto-login)
       // Check if we just came from password reset by checking sessionStorage
       // Only ignore if we're still on the reset password page
-      const currentPath = window.location.pathname;
       if (event === 'SIGNED_IN' && sessionStorage.getItem('password_reset_complete') && currentPath === '/auth/reset-password') {
         console.log('🔐 Ignoring SIGNED_IN after password reset (still on reset page) - forcing logout');
         sessionStorage.removeItem('password_reset_complete');
