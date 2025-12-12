@@ -30,6 +30,27 @@ export const checkEmailExists = async (email) => {
   return exists;
 };
 
+// Custom auth endpoints
+export const login = async (email, password) => {
+  const { user, token } = await httpClient.post('/auth/login', { email, password });
+  return { user, token };
+};
+
+export const requestPasswordReset = async (email) => {
+  const result = await httpClient.post('/auth/request-password-reset', { email });
+  return result;
+};
+
+export const resetPassword = async (token, password) => {
+  const result = await httpClient.post('/auth/reset-password', { token, password });
+  return result;
+};
+
+export const updatePassword = async (currentPassword, newPassword) => {
+  const result = await httpClient.post('/auth/update-password', { currentPassword, newPassword });
+  return result;
+};
+
 // Vehicles
 export const fetchVehicles = async (orderBy = 'permit_number') => {
   const { vehicles } = await httpClient.get(`/vehicles?orderBy=${orderBy}`);

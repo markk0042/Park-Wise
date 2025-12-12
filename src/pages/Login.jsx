@@ -1,21 +1,21 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
-import { checkEmailExists } from '@/api';
-import { supabase } from '@/lib/supabaseClient';
+import { checkEmailExists, resetPassword as apiResetPassword } from '@/api';
 import { Shield, Lock, KeyRound } from 'lucide-react';
 
 export default function Login() {
-  const { signInWithPassword, resetPassword, isPasswordRecovery } = useAuth();
+  const { signInWithPassword, resetPassword } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const resetToken = searchParams.get('token');
   
-  // Check for recovery hash directly in Login component as a safety check
-  const hash = typeof window !== 'undefined' ? window.location.hash : '';
-  const hasRecoveryHash = hash && hash.includes('type=recovery');
-  const shouldShowResetForm = isPasswordRecovery || hasRecoveryHash;
+  // Check if we have a reset token in URL
+  const shouldShowResetForm = !!resetToken;
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,105 +27,18 @@ export default function Login() {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(shouldShowResetForm);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  
-  console.log('🔍 [Login] Component state:', { 
-    isPasswordRecovery, 
-    hasRecoveryHash, 
-    shouldShowResetForm,
-    hash: hash ? 'Hash found' : 'No hash'
-  });
 
-  // Check for password reset token in URL hash - MUST run immediately on mount
+  // Check for password reset token in URL query params
   useEffect(() => {
-    const checkPasswordResetToken = async () => {
-      // Check URL hash for access_token (Supabase password reset)
-      const hash = window.location.hash;
-      console.log('🔍 [Login] Checking URL hash for reset token:', hash ? 'Hash found' : 'No hash');
-      
-      if (!hash || !hash.includes('access_token')) {
-        console.log('🔍 [Login] No reset token in hash');
-        return;
-      }
-      
-      const hashParams = new URLSearchParams(hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      const type = hashParams.get('type');
-      
-      console.log('📧 [Login] Reset token detected:', { 
-        hasToken: !!accessToken, 
-        type,
-        hasRefreshToken: !!refreshToken 
+    if (resetToken) {
+      console.log('✅ [Login] Password reset token found in URL');
+      setIsResettingPasswordForm(true);
+      setStatus({ 
+        type: 'success', 
+        message: 'Please enter your new password below.' 
       });
-      
-      if (accessToken && type === 'recovery') {
-        // User came from password reset email
-        console.log('✅ [Login] Password reset token found, setting up recovery session...');
-        
-        // Show the form immediately to prevent AuthContext from clearing
-        setIsResettingPasswordForm(true);
-        setStatus({ 
-          type: 'info', 
-          message: 'Processing reset link...' 
-        });
-        
-        // Exchange the token for a session FIRST, before clearing hash
-        try {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken || '',
-          });
-          
-          if (error) {
-            console.error('❌ [Login] Error setting session:', error);
-            setStatus({ 
-              type: 'error', 
-              message: `Invalid or expired reset link: ${error.message}. Please request a new password reset.` 
-            });
-            setIsResettingPasswordForm(false);
-            // Clear the hash even on error
-            window.history.replaceState(null, '', window.location.pathname);
-            return;
-          }
-          
-          console.log('✅ [Login] Session set successfully, showing password reset form');
-          
-          // Verify session is still valid
-          const { data: { session: currentSession } } = await supabase.auth.getSession();
-          if (!currentSession) {
-            throw new Error('Session was cleared. Please request a new password reset.');
-          }
-          
-          // Only clear hash after successful session setup
-          window.history.replaceState(null, '', window.location.pathname);
-          setStatus({ 
-            type: 'success', 
-            message: 'Please enter your new password below.' 
-          });
-        } catch (err) {
-          console.error('❌ [Login] Error processing reset token:', err);
-          setStatus({ 
-            type: 'error', 
-            message: `Failed to process reset link: ${err.message}. Please request a new password reset.` 
-          });
-          setIsResettingPasswordForm(false);
-          window.history.replaceState(null, '', window.location.pathname);
-        }
-      } else if (hash.includes('error')) {
-        // Handle error from Supabase
-        const errorDescription = hashParams.get('error_description') || hashParams.get('error');
-        console.error('❌ [Login] Error in reset link:', errorDescription);
-        setStatus({ 
-          type: 'error', 
-          message: `Reset link error: ${errorDescription || 'Invalid link'}. Please request a new password reset.` 
-        });
-        window.history.replaceState(null, '', window.location.pathname);
-      }
-    };
-    
-    // Run immediately - don't delay, we need to process before AuthContext clears session
-    checkPasswordResetToken();
-  }, []);
+    }
+  }, [resetToken]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -241,24 +154,14 @@ export default function Login() {
     }
     
     try {
-      // Check if we have a valid session first
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session. The reset link may have expired. Please request a new password reset.');
+      if (!resetToken) {
+        throw new Error('No reset token found. Please request a new password reset.');
       }
       
-      console.log('✅ Session found, updating password...');
+      console.log('✅ Resetting password with token...');
       
-      // Update the password using Supabase
-      const { data, error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-      
-      if (error) {
-        console.error('❌ Password update error:', error);
-        throw error;
-      }
+      // Reset password using the token
+      await apiResetPassword(resetToken, newPassword);
       
       console.log('✅ Password updated successfully');
       
@@ -272,12 +175,12 @@ export default function Login() {
       setConfirmPassword('');
       setIsResettingPasswordForm(false);
       
-      // Clear the recovery flag and sign out the user so they sign in with new password
-      setTimeout(async () => {
-        console.log('🔓 Signing out after password reset...');
-        await supabase.auth.signOut();
-        // Clear any recovery state
-        window.history.replaceState(null, '', window.location.pathname);
+      // Remove token from URL
+      setSearchParams({});
+      
+      // Clear form after 2 seconds
+      setTimeout(() => {
+        setEmail('');
       }, 2000);
       
     } catch (err) {

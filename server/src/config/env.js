@@ -12,7 +12,8 @@ const envSchema = z.object({
   SUPABASE_STORAGE_BUCKET: z.string().default('complaint-evidence'),
   CORS_ORIGIN: z.string().default('*'),
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
-  CLEANUP_SECRET_TOKEN: z.string().optional() // Secret token for cleanup endpoint (for cron jobs)
+  CLEANUP_SECRET_TOKEN: z.string().optional(), // Secret token for cleanup endpoint (for cron jobs)
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters').optional()
 });
 
 const parsed = envSchema.safeParse(process.env);

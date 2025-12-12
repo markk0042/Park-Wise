@@ -1,10 +1,17 @@
-import { supabase } from '@/lib/supabaseClient';
-
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api';
 
-async function getAccessToken() {
-  const { data } = await supabase.auth.getSession();
-  return data?.session?.access_token;
+// Get JWT token from localStorage
+function getAccessToken() {
+  return localStorage.getItem('auth_token');
+}
+
+// Store JWT token in localStorage
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem('auth_token', token);
+  } else {
+    localStorage.removeItem('auth_token');
+  }
 }
 
 async function request(path, { method = 'GET', body, headers = {}, signal } = {}) {

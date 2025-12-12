@@ -2,6 +2,15 @@ import { z } from 'zod';
 import createError from 'http-errors';
 import { supabaseAdmin } from '../config/supabase.js';
 import { listProfiles, updateProfile, findOrCreateProfile, deleteProfile } from '../services/profile.service.js';
+import {
+  authenticateUser,
+  createUser,
+  generateToken,
+  setPasswordResetToken,
+  resetPasswordWithToken,
+  updatePassword as updateUserPassword,
+  adminResetPassword,
+} from '../services/auth.service.js';
 
 const updateMeSchema = z.object({
   full_name: z.string().min(1).optional(),
@@ -143,18 +152,11 @@ export const checkEmailExists = async (req, res, next) => {
     });
     const { email } = schema.parse(req.body);
     
-    // Check if user exists in auth
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserByEmail(email);
-    
-    if (!authUser?.user) {
-      return res.json({ exists: false, message: 'Email not found' });
-    }
-    
-    // Check if profile exists
+    // Check if profile exists in database directly
     const { data: profile, error } = await supabaseAdmin
       .from('profiles')
       .select('id, email')
-      .eq('id', authUser.user.id)
+      .eq('email', email.toLowerCase())
       .single();
     
     if (error || !profile) {
@@ -164,5 +166,148 @@ export const checkEmailExists = async (req, res, next) => {
     res.json({ exists: true, message: 'Email found' });
   } catch (err) {
     next(err);
+  }
+};
+
+// Custom login endpoint
+export const login = async (req, res, next) => {
+  try {
+    const schema = z.object({
+      email: z.string().email(),
+      password: z.string().min(6)
+    });
+    const { email, password } = schema.parse(req.body);
+    
+    // Authenticate user
+    const user = await authenticateUser(email, password);
+    
+    // Generate JWT token
+    const token = generateToken(user);
+    
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        status: user.status,
+      },
+      token
+    });
+  } catch (err) {
+    next(createError(401, err.message || 'Authentication failed'));
+  }
+};
+
+// Request password reset
+export const requestPasswordReset = async (req, res, next) => {
+  try {
+    const schema = z.object({
+      email: z.string().email()
+    });
+    const { email } = schema.parse(req.body);
+    
+    // Set reset token
+    const { reset_token, user } = await setPasswordResetToken(email);
+    
+    // In production, you would send an email here with the reset link
+    // For now, we'll return the token (remove this in production!)
+    // TODO: Send email with reset link: ${process.env.FRONTEND_URL}/reset-password?token=${reset_token}
+    
+    res.json({
+      message: 'Password reset link has been sent to your email',
+      // Remove this in production - only for testing
+      reset_token: process.env.NODE_ENV === 'development' ? reset_token : undefined
+    });
+  } catch (err) {
+    // Don't reveal if email exists or not (security best practice)
+    res.json({
+      message: 'If the email exists, a password reset link has been sent'
+    });
+  }
+};
+
+// Reset password with token
+export const resetPassword = async (req, res, next) => {
+  try {
+    const schema = z.object({
+      token: z.string(),
+      password: z.string().min(6)
+    });
+    const { token, password } = schema.parse(req.body);
+    
+    // Reset password
+    const user = await resetPasswordWithToken(token, password);
+    
+    res.json({
+      message: 'Password has been reset successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        status: user.status,
+      }
+    });
+  } catch (err) {
+    next(createError(400, err.message || 'Failed to reset password'));
+  }
+};
+
+// Update password (for authenticated users)
+export const updatePassword = async (req, res, next) => {
+  try {
+    const schema = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6)
+    });
+    const { currentPassword, newPassword } = schema.parse(req.body);
+    
+    const user = await updateUserPassword(req.user.id, currentPassword, newPassword);
+    
+    res.json({
+      message: 'Password updated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        status: user.status,
+      }
+    });
+  } catch (err) {
+    next(createError(400, err.message || 'Failed to update password'));
+  }
+};
+
+// Admin reset user password (no current password required)
+export const adminResetUserPassword = async (req, res, next) => {
+  try {
+    const schema = z.object({
+      password: z.string().min(6)
+    });
+    const { password } = schema.parse(req.body);
+    const userId = req.params.id;
+    
+    // Prevent admins from resetting their own password via this endpoint
+    // (they should use the regular update-password endpoint)
+    if (userId === req.user.id) {
+      return next(createError(400, 'Cannot reset your own password via this endpoint. Use /api/auth/update-password instead.'));
+    }
+    
+    const user = await adminResetPassword(userId, password);
+    
+    res.json({
+      message: 'User password has been reset successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        status: user.status,
+      }
+    });
+  } catch (err) {
+    next(createError(400, err.message || 'Failed to reset user password'));
   }
 };
