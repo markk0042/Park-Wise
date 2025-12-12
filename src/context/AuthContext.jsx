@@ -31,11 +31,38 @@ export function AuthProvider({ children }) {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (session) {
           console.log('🔐 Found existing Supabase session');
-          setToken(session.access_token);
-          setAuthToken(session.access_token);
+          // Verify the session is still valid by checking if we can get user info
+          try {
+            const { data: { user }, error: userError } = await supabase.auth.getUser(session.access_token);
+            if (userError || !user) {
+              console.log('🔐 Session is invalid, clearing...');
+              await supabase.auth.signOut();
+              setLoading(false);
+              return;
+            }
+            // Session is valid, set token
+            setToken(session.access_token);
+            setAuthToken(session.access_token);
+          } catch (verifyError) {
+            console.error('Error verifying session:', verifyError);
+            // If we can't verify, clear the session
+            await supabase.auth.signOut();
+            setLoading(false);
+            return;
+          }
+        } else {
+          // No session found, ensure we're signed out
+          console.log('🔐 No session found');
+          setToken(null);
+          setProfile(null);
+          setAuthToken(null);
         }
         if (error) {
           console.error('Error loading session:', error);
+          // Clear any stale state on error
+          setToken(null);
+          setProfile(null);
+          setAuthToken(null);
         }
       } catch (err) {
         console.error('Error getting session:', err);
@@ -178,9 +205,13 @@ export function AuthProvider({ children }) {
         setLoading(true);
         // Fetch profile from backend (which syncs with Supabase)
         const user = await fetchCurrentUser();
+        if (!user) {
+          throw new Error('No user data returned');
+        }
         setProfile(user);
         setError(null);
       } catch (err) {
+        console.error('Error loading profile:', err);
         // Handle 401 errors gracefully (session expired or invalid)
         if (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
           console.log('🔒 Session expired or invalid - clearing session');
@@ -192,8 +223,13 @@ export function AuthProvider({ children }) {
           // Sign out from Supabase as well
           await supabase.auth.signOut();
         } else {
+          // If profile fetch fails for other reasons, clear session
+          console.log('🔒 Profile fetch failed - clearing session');
           setError(err);
           setProfile(null);
+          setToken(null);
+          setAuthToken(null);
+          await supabase.auth.signOut();
         }
       } finally {
         setLoading(false);
