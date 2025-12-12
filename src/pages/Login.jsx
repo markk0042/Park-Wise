@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,8 @@ import { useAuth } from '@/context/AuthContext';
 import { Shield, Lock } from 'lucide-react';
 
 export default function Login() {
-  const { signInWithPassword, resetPassword } = useAuth();
+  const { signInWithPassword, resetPassword, isAuthenticated, profile } = useAuth();
+  const navigate = useNavigate();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,6 +31,15 @@ export default function Login() {
       sessionStorage.removeItem('session_expired');
     }
   }, []);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && profile) {
+      console.log('🔐 User is authenticated, redirecting...');
+      const defaultRoute = profile?.role === 'admin' ? '/UserManagement' : '/Dashboard';
+      navigate(defaultRoute, { replace: true });
+    }
+  }, [isAuthenticated, profile, navigate]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
