@@ -108,18 +108,21 @@ export default function Login() {
       }
       
       // If email exists, send password reset link
+      console.log('📧 Requesting password reset for:', email);
       const result = await resetPassword(email);
+      console.log('📧 Password reset response:', result);
       
-      // In development, show the reset token if provided
+      // Show the reset token if provided (development or email failed)
       if (result?.reset_token) {
         const resetLink = `${window.location.origin}/login?token=${result.reset_token}`;
         setStatus({ 
           type: 'success', 
-          message: `🔧 Development Mode: Email service not configured. Use this link to reset: ${resetLink} (Check server console for details)` 
+          message: `Password reset link: ${resetLink} (Token: ${result.reset_token})` 
         });
         // Also log to browser console
-        console.log('📧 Password Reset Token (Development):', result.reset_token);
+        console.log('✅ Password Reset Token:', result.reset_token);
         console.log('🔗 Reset Link:', resetLink);
+        console.log('💡 Click the link above or copy the token to reset your password');
       } else {
         setStatus({ 
           type: 'success', 
@@ -128,29 +131,30 @@ export default function Login() {
       }
       setShowForgotPassword(false);
     } catch (err) {
-      console.error('Password reset error:', err);
-      // If it's a 404, the endpoint might not be available - try direct Supabase reset
-      if (err?.status === 404 || err?.message?.includes('404')) {
-        try {
-          // Fallback: try direct Supabase reset (less secure but works)
-          await resetPassword(email);
-          setStatus({ 
-            type: 'success', 
-            message: 'Password reset link has been sent to your email. Please check your inbox.' 
-          });
-          setShowForgotPassword(false);
-        } catch (resetError) {
-          setStatus({ 
-            type: 'error', 
-            message: resetError.message || 'Failed to send password reset link. Please try again or contact support.' 
-          });
-        }
+      console.error('❌ Password reset error:', err);
+      console.error('Error details:', {
+        message: err.message,
+        status: err.status,
+        response: err.details
+      });
+      
+      // Show detailed error message
+      let errorMessage = 'Failed to send password reset link. ';
+      
+      if (err?.status === 404) {
+        errorMessage += 'The password reset endpoint was not found. Please check if the backend is running.';
+      } else if (err?.status === 502 || err?.status === 503) {
+        errorMessage += 'The backend server is not responding. Please try again later.';
+      } else if (err?.message) {
+        errorMessage += err.message;
       } else {
-        setStatus({ 
-          type: 'error', 
-          message: err.message || 'Failed to send password reset link. Please try again.' 
-        });
+        errorMessage += 'Please try again or contact support.';
       }
+      
+      setStatus({ 
+        type: 'error', 
+        message: errorMessage
+      });
     } finally {
       setIsResettingPassword(false);
     }

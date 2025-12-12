@@ -211,20 +211,34 @@ export const requestPasswordReset = async (req, res, next) => {
     // Set reset token
     const { reset_token, user } = await setPasswordResetToken(email);
     
+    console.log(`\n🔐 Password reset requested for: ${email}`);
+    console.log(`📝 Reset token generated: ${reset_token}`);
+    
     // Send password reset email
+    let emailSent = false;
     try {
-      await sendPasswordResetEmail(email, reset_token);
-      console.log(`✅ Password reset email sent to ${email}`);
+      const emailResult = await sendPasswordResetEmail(email, reset_token);
+      emailSent = emailResult?.success || false;
+      if (emailResult?.devMode) {
+        console.log(`📧 [DEV MODE] Email not configured - token logged above`);
+      } else {
+        console.log(`✅ Password reset email sent to ${email}`);
+      }
     } catch (emailError) {
       console.error('❌ Failed to send password reset email:', emailError);
-      // Still return success to user (don't reveal if email exists)
-      // But log the error for debugging
+      console.error('   Error message:', emailError.message);
+      // Still continue - token is generated and will be returned
     }
     
+    // Always return token in development, or if email failed
+    const shouldReturnToken = process.env.NODE_ENV === 'development' || !emailSent;
+    
     res.json({
-      message: 'If the email exists, a password reset link has been sent to your email',
-      // In development, also return token for testing (remove in production)
-      reset_token: process.env.NODE_ENV === 'development' ? reset_token : undefined
+      message: emailSent 
+        ? 'Password reset link has been sent to your email'
+        : 'If the email exists, a password reset link has been sent to your email',
+      // Return token in development or if email sending failed
+      reset_token: shouldReturnToken ? reset_token : undefined
     });
   } catch (err) {
     // Log error for debugging

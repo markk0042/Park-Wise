@@ -154,10 +154,13 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     return { success: true, devMode: true };
   }
 
-  // In production without email config, throw error
+  // In production without email config, log warning but don't throw
+  // This allows the token to still be returned for manual use
   if (!transporter) {
-    console.error('❌ Email transporter not configured. Please set up SMTP or Gmail credentials.');
-    throw new Error('Email service not configured');
+    console.warn('⚠️  Email transporter not configured. Password reset token will be logged but not emailed.');
+    console.warn('💡 To enable email sending, configure SMTP or Gmail in .env file');
+    // Return success with devMode flag so token can be returned
+    return { success: false, devMode: true, error: 'Email service not configured' };
   }
 
   // Send actual email
