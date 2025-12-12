@@ -92,13 +92,16 @@ export function AuthProvider({ children }) {
         console.log('🔐 On reset password page - letting page handle session');
         // Don't interfere with the reset password page's session management
         // The page will handle signing out and setting sessions itself
-        // Only process USER_UPDATED events (when password is successfully updated)
-        if (event === 'USER_UPDATED') {
-          // Password was updated, now we can sign out
-          console.log('🔐 Password updated - signing out');
-          await supabase.auth.signOut();
-        }
-        // Ignore all other events on reset password page
+        // Ignore ALL events on reset password page - let the page component handle everything
+        return;
+      }
+      
+      // Also ignore SIGNED_IN events right after password reset (prevent auto-login)
+      // Check if we just came from password reset by checking sessionStorage
+      if (event === 'SIGNED_IN' && sessionStorage.getItem('password_reset_complete')) {
+        console.log('🔐 Ignoring SIGNED_IN after password reset - forcing logout');
+        sessionStorage.removeItem('password_reset_complete');
+        await supabase.auth.signOut();
         return;
       }
       

@@ -23,12 +23,16 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     if (!isUpdating) return; // Only listen when we're updating
         
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'USER_UPDATED' && isUpdating) {
+    let handled = false; // Prevent duplicate handling
+        
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'USER_UPDATED' && isUpdating && !handled) {
+        handled = true;
         console.log('✅ Password update confirmed via USER_UPDATED event');
-        setPasswordUpdateSuccess(true);
-        // Stop the loading spinner
+        
+        // Stop the loading spinner immediately
         setIsUpdating(false);
+        setPasswordUpdateSuccess(true);
         
         // Set success status
         setStatus({
@@ -36,12 +40,22 @@ export default function ResetPasswordPage() {
           message: "Password updated successfully! Redirecting to login..."
         });
 
-        // Sign out
-        supabase.auth.signOut().catch(err => {
-          console.warn('Sign out error (non-critical):', err);
-        });
+        // Mark that password reset is complete (to prevent auto-login)
+        sessionStorage.setItem('password_reset_complete', 'true');
 
-        // Call backend to sync (fire-and-forget)
+        // Sign out immediately and wait for it to complete
+        try {
+          console.log('🔐 Signing out after password reset...');
+          await supabase.auth.signOut();
+          console.log('✅ Signed out successfully');
+        } catch (err) {
+          console.warn('Sign out error (non-critical):', err);
+        }
+
+        // Clear any remaining tokens
+        setRecoveryTokens(null);
+
+        // Call backend to sync (fire-and-forget, endpoint might not exist)
         const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
         if (recoveryTokens?.access_token) {
           fetch(`${backendUrl}/auth/sync-password-reset`, {
@@ -51,15 +65,14 @@ export default function ResetPasswordPage() {
               Authorization: `Bearer ${recoveryTokens.access_token}`,
             },
             body: JSON.stringify({ password_reset: true }),
-          }).catch(backendError => {
-            console.warn("Backend sync failed (non-critical):", backendError);
+          }).catch(() => {
+            // Silently ignore - endpoint doesn't exist
           });
         }
 
-        // Redirect to login
-        setTimeout(() => {
-          navigate("/login");
-        }, 1500);
+        // Redirect to login immediately (don't wait)
+        console.log('🔐 Redirecting to login...');
+        navigate("/login", { replace: true });
       }
     });
 
@@ -251,29 +264,30 @@ export default function ResetPasswordPage() {
         throw new Error(errorMessage);
       }
 
-      // If updateUser completed without error, wait a moment for USER_UPDATED event
-      // The event listener will handle the success flow
-      console.log('✅ Password update initiated, waiting for USER_UPDATED event...');
+      // Password update completed successfully
+      // The USER_UPDATED event listener will handle the rest
+      console.log('✅ Password update completed, waiting for USER_UPDATED event...');
       
-      // Give the event listener a moment to fire
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Give the event listener a moment to fire (it should fire immediately)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // If the event listener didn't fire (shouldn't happen), handle it here as fallback
-      if (!passwordUpdateSuccess) {
-        console.log('✅ Password updated (fallback - event listener may have missed it)');
+      // Fallback: If event listener didn't handle it (shouldn't happen)
+      if (isUpdating && !passwordUpdateSuccess) {
+        console.log('✅ Password updated (fallback handler)');
         setIsUpdating(false);
         setStatus({
           type: "success",
           message: "Password updated successfully! Redirecting to login..."
         });
 
-        supabase.auth.signOut().catch(err => {
-          console.warn('Sign out error (non-critical):', err);
-        });
+        try {
+          await supabase.auth.signOut();
+        } catch (err) {
+          console.warn('Sign out error:', err);
+        }
 
-        setTimeout(() => {
-          navigate("/login");
-        }, 1500);
+        setRecoveryTokens(null);
+        navigate("/login", { replace: true });
       }
     } catch (err) {
       console.error("Password reset error:", err);
