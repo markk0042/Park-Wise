@@ -108,11 +108,24 @@ export default function Login() {
       }
       
       // If email exists, send password reset link
-      await resetPassword(email);
-      setStatus({ 
-        type: 'success', 
-        message: 'Password reset link has been sent to your email. Please check your inbox.' 
-      });
+      const result = await resetPassword(email);
+      
+      // In development, show the reset token if provided
+      if (result?.reset_token) {
+        const resetLink = `${window.location.origin}/login?token=${result.reset_token}`;
+        setStatus({ 
+          type: 'success', 
+          message: `🔧 Development Mode: Email service not configured. Use this link to reset: ${resetLink} (Check server console for details)` 
+        });
+        // Also log to browser console
+        console.log('📧 Password Reset Token (Development):', result.reset_token);
+        console.log('🔗 Reset Link:', resetLink);
+      } else {
+        setStatus({ 
+          type: 'success', 
+          message: 'Password reset link has been sent to your email. Please check your inbox.' 
+        });
+      }
       setShowForgotPassword(false);
     } catch (err) {
       console.error('Password reset error:', err);

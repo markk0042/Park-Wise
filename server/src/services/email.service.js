@@ -30,20 +30,8 @@ const createTransporter = () => {
     });
   }
 
-  // Development: Create a test account (ethereal.email) or use console
-  if (env.NODE_ENV === 'development') {
-    // For development, we'll use a test transporter that logs to console
-    return nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      auth: {
-        user: 'test@ethereal.email',
-        pass: 'test',
-      },
-    });
-  }
-
   // No email configured - return null
+  // In development, this will trigger console logging instead of sending email
   return null;
 };
 
@@ -154,22 +142,26 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     `,
   };
 
+  // In development without email config, just log to console
+  if (env.NODE_ENV === 'development' && !transporter) {
+    console.log('\n📧 [DEV MODE] Password reset email would be sent:');
+    console.log('   To:', email);
+    console.log('   Reset Link:', resetLink);
+    console.log('   Token:', resetToken);
+    console.log('\n💡 To enable actual email sending, configure SMTP or Gmail in .env file');
+    console.log('   Example: GMAIL_USER=your-email@gmail.com');
+    console.log('            GMAIL_APP_PASSWORD=your-app-password\n');
+    return { success: true, devMode: true };
+  }
+
+  // In production without email config, throw error
+  if (!transporter) {
+    console.error('❌ Email transporter not configured. Please set up SMTP or Gmail credentials.');
+    throw new Error('Email service not configured');
+  }
+
+  // Send actual email
   try {
-    // In development without email config, just log to console
-    if (env.NODE_ENV === 'development' && !transporter) {
-      console.log('📧 [DEV] Password reset email would be sent:');
-      console.log('   To:', email);
-      console.log('   Reset Link:', resetLink);
-      console.log('   Token:', resetToken);
-      console.log('\n💡 To enable email sending, configure SMTP or Gmail in .env file');
-      return { success: true, devMode: true };
-    }
-
-    if (!transporter) {
-      console.error('❌ Email transporter not configured. Please set up SMTP or Gmail credentials.');
-      throw new Error('Email service not configured');
-    }
-
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Password reset email sent successfully');
     console.log('   To:', email);
@@ -178,6 +170,11 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Failed to send password reset email:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command
+    });
     throw new Error(`Failed to send email: ${error.message}`);
   }
 };
