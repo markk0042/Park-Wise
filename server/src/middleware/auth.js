@@ -75,15 +75,19 @@ export const requireApproved = (req, res, next) => {
   next();
 };
 
-// Super admin check - only the specified email can perform super admin actions
+// Super admin check - only the specified emails can perform super admin actions
+// Supports comma-separated list of emails
 export const requireSuperAdmin = (req, res, next) => {
-  const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || '';
+  const SUPER_ADMIN_EMAILS = process.env.SUPER_ADMIN_EMAIL || '';
   
-  if (!SUPER_ADMIN_EMAIL) {
+  if (!SUPER_ADMIN_EMAILS) {
     return next(createError(500, 'Super admin email not configured'));
   }
   
-  if (req.user?.email !== SUPER_ADMIN_EMAIL) {
+  // Split by comma and trim whitespace to support multiple emails
+  const superAdminEmails = SUPER_ADMIN_EMAILS.split(',').map(email => email.trim()).filter(Boolean);
+  
+  if (!superAdminEmails.includes(req.user?.email)) {
     return next(createError(403, 'Super admin access required'));
   }
   

@@ -28,14 +28,16 @@ export default function UserManagement() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetPasswordError, setResetPasswordError] = useState('');
 
-  // Check if current user is super admin (you can set your email here or via env)
-  const SUPER_ADMIN_EMAIL = import.meta.env.VITE_SUPER_ADMIN_EMAIL || 'markk0042@gmail.com';
-  const isSuperAdmin = currentUser?.email === SUPER_ADMIN_EMAIL;
+  // Check if current user is super admin (supports multiple emails via comma-separated list)
+  const SUPER_ADMIN_EMAILS_STR = import.meta.env.VITE_SUPER_ADMIN_EMAIL || 'markk0042@gmail.com,palinden@live.ie,philip.mcalinden@mcr.ie';
+  // Split by comma and trim whitespace to support multiple emails
+  const SUPER_ADMIN_EMAILS = SUPER_ADMIN_EMAILS_STR.split(',').map(email => email.trim()).filter(Boolean);
+  const isSuperAdmin = currentUser?.email && SUPER_ADMIN_EMAILS.includes(currentUser.email);
   
   // Debug: Log to console (remove after testing)
   if (currentUser?.email) {
     console.log('Current user email:', currentUser.email);
-    console.log('Super admin email from env:', SUPER_ADMIN_EMAIL);
+    console.log('Super admin emails:', SUPER_ADMIN_EMAILS);
     console.log('Is super admin:', isSuperAdmin);
   }
 
