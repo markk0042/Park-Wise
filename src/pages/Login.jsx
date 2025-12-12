@@ -87,30 +87,16 @@ export default function Login() {
     }
     
     try {
-      // First, check if email exists in profiles
-      let emailExists = false;
-      try {
-        emailExists = await checkEmailExists(email);
-      } catch (checkError) {
-        console.error('Error checking email:', checkError);
-        // If check fails, still try to send reset (Supabase will handle if email doesn't exist)
-        // This provides better UX - user gets a message either way
-        emailExists = true; // Assume it exists and let Supabase handle validation
-      }
-      
-      if (!emailExists) {
-        setStatus({ 
-          type: 'error', 
-          message: 'This email is not registered. Please contact an administrator.' 
-        });
-        setIsResettingPassword(false);
-        return;
-      }
-      
-      // If email exists, send password reset link
+      // Request password reset - backend will handle email validation
+      // We don't check email existence first to avoid revealing if email exists
       console.log('📧 Requesting password reset for:', email);
       const result = await resetPassword(email);
       console.log('📧 Password reset response:', result);
+      
+      // Check if we got an error response
+      if (result?.error) {
+        throw new Error(result.error.message || 'Failed to request password reset');
+      }
       
       // Show the reset token if provided (development or email failed)
       if (result?.reset_token) {

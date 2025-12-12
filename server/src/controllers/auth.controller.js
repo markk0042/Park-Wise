@@ -230,8 +230,22 @@ export const requestPasswordReset = async (req, res, next) => {
       // Still continue - token is generated and will be returned
     }
     
-    // Always return token in development, or if email failed
+    // Always return token if email sending failed, or in development
+    // This ensures users can still reset password even if email isn't configured
     const shouldReturnToken = process.env.NODE_ENV === 'development' || !emailSent;
+    
+    // ALWAYS log the token to console for debugging/admin use
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🔐 PASSWORD RESET TOKEN GENERATED`);
+    console.log(`${'='.repeat(60)}`);
+    console.log(`📧 Email: ${email}`);
+    console.log(`🔑 Token: ${reset_token}`);
+    const resetLink = `${process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://park-wise-two.vercel.app' : 'http://localhost:5173')}/login?token=${reset_token}`;
+    console.log(`🔗 Reset Link: ${resetLink}`);
+    console.log(`⏰ Expires: 1 hour from now`);
+    console.log(`📤 Email sent: ${emailSent ? 'YES' : 'NO'}`);
+    console.log(`🔑 Token in response: ${shouldReturnToken ? 'YES' : 'NO'}`);
+    console.log(`${'='.repeat(60)}\n`);
     
     res.json({
       message: emailSent 
@@ -242,12 +256,19 @@ export const requestPasswordReset = async (req, res, next) => {
     });
   } catch (err) {
     // Log error for debugging
-    console.error('❌ Password reset request error:', err);
+    console.error('\n❌ Password reset request error:', err);
     console.error('Error details:', {
       message: err.message,
       stack: err.stack,
-      status: err.status || err.statusCode
+      status: err.status || err.statusCode,
+      email: req.body?.email
     });
+    
+    // Check if it's a "user not found" error
+    if (err.message?.includes('User not found') || err.message?.includes('not found')) {
+      console.log('⚠️  Email not found in database:', req.body?.email);
+      // Don't reveal if email exists (security), but log it for debugging
+    }
     
     // Don't reveal if email exists or not (security best practice)
     res.json({
