@@ -24,12 +24,26 @@ export default function ResetPasswordPage() {
     const hash = window.location.hash;
     console.log('🔐 URL hash:', hash);
     
-    const params = new URLSearchParams(hash.replace("#", "?"));
+    if (!hash || hash.length < 2) {
+      setStatus({
+        type: "error",
+        message: "Invalid or expired reset link. Please request a new password reset."
+      });
+      return;
+    }
+    
+    const params = new URLSearchParams(hash.substring(1)); // Remove the #
     const accessToken = params.get("access_token");
     const refreshToken = params.get("refresh_token");
     const type = params.get("type");
 
-    console.log('🔐 Extracted tokens:', { type, hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken });
+    console.log('🔐 Extracted tokens:', { 
+      type, 
+      hasAccessToken: !!accessToken, 
+      hasRefreshToken: !!refreshToken,
+      accessTokenLength: accessToken?.length,
+      refreshTokenLength: refreshToken?.length
+    });
 
     if (type === "recovery" && accessToken) {
       // Store the tokens for later use
@@ -48,10 +62,8 @@ export default function ResetPasswordPage() {
       // But we've already extracted the tokens, so we're safe
       window.history.replaceState(null, '', window.location.pathname);
       
-      // Now sign out any existing session to prevent auto-login
-      supabase.auth.signOut().catch(err => {
-        console.warn('Error signing out:', err);
-      });
+      // Don't sign out here - let the session be set when we update the password
+      // The AuthContext will ignore events on this page anyway
     } else {
       setStatus({
         type: "error",
@@ -90,24 +102,63 @@ export default function ResetPasswordPage() {
       }
 
       console.log('🔐 Setting session with recovery tokens...');
+      console.log('🔐 Access token (first 50 chars):', recoveryTokens.access_token.substring(0, 50));
+      console.log('🔐 Refresh token:', recoveryTokens.refresh_token || 'NOT PROVIDED');
+      
+      // IMPORTANT: Supabase requires BOTH access_token and refresh_token for setSession
+      // If we don't have refresh_token, we need to get it from the URL hash again
+      // or use a different approach
+      let refreshToken = recoveryTokens.refresh_token;
+      
+      // If no refresh token was stored, try to get it from current URL (in case it's still there)
+      if (!refreshToken) {
+        const currentHash = window.location.hash;
+        if (currentHash) {
+          const params = new URLSearchParams(currentHash.substring(1));
+          refreshToken = params.get("refresh_token");
+          console.log('🔐 Retrieved refresh token from URL:', refreshToken ? 'YES' : 'NO');
+        }
+      }
+      
+      if (!refreshToken) {
+        console.warn('⚠️ No refresh token available - this might cause issues');
+      }
       
       // Set the session using the stored recovery tokens
       // This is required for Supabase to allow password update
-      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+      const sessionPayload = {
         access_token: recoveryTokens.access_token,
-        refresh_token: recoveryTokens.refresh_token || recoveryTokens.access_token, // Fallback if no refresh token
+      };
+      
+      // Only add refresh_token if we have it (Supabase prefers it but might work without)
+      if (refreshToken) {
+        sessionPayload.refresh_token = refreshToken;
+      }
+      
+      console.log('🔐 Setting session with payload:', {
+        hasAccessToken: !!sessionPayload.access_token,
+        hasRefreshToken: !!sessionPayload.refresh_token
       });
+      
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession(sessionPayload);
       
       if (sessionError) {
         console.error('❌ Session error:', sessionError);
+        console.error('❌ Session error details:', {
+          message: sessionError.message,
+          status: sessionError.status,
+          name: sessionError.name
+        });
         throw new Error(sessionError.message || "Failed to authenticate reset link. Please request a new password reset.");
       }
 
-      if (!sessionData.session) {
+      if (!sessionData || !sessionData.session) {
+        console.error('❌ No session data returned');
         throw new Error("Failed to create session. Please request a new password reset.");
       }
 
       console.log('✅ Session created, updating password...');
+      console.log('✅ Session user ID:', sessionData.session.user?.id);
 
       // Update password using Supabase (requires active session)
       const { error: updateError } = await supabase.auth.updateUser({ 

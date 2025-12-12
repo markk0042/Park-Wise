@@ -53,20 +53,20 @@ export function AuthProvider({ children }) {
       console.log('🔐 Auth state changed:', event, 'Has session:', !!session);
       
       // CRITICAL: Don't auto-login if we're on the reset password page
-      // The reset link creates a session, but we want to sign out first
+      // But allow the reset password page to handle its own session management
       const currentPath = window.location.pathname;
       if (currentPath === '/auth/reset-password') {
-        console.log('🔐 On reset password page - preventing auto-login');
-        // If it's a recovery event, sign out immediately
-        if (event === 'PASSWORD_RECOVERY' && session) {
-          console.log('🔐 PASSWORD_RECOVERY detected - signing out to prevent auto-login');
+        console.log('🔐 On reset password page - letting page handle session');
+        // Don't interfere with the reset password page's session management
+        // The page will handle signing out and setting sessions itself
+        // Only process USER_UPDATED events (when password is successfully updated)
+        if (event === 'USER_UPDATED') {
+          // Password was updated, now we can sign out
+          console.log('🔐 Password updated - signing out');
           await supabase.auth.signOut();
-          return;
         }
-        // Don't process other events on reset password page
-        if (event !== 'USER_UPDATED') {
-          return;
-        }
+        // Ignore all other events on reset password page
+        return;
       }
       
       if (session) {
