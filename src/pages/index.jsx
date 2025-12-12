@@ -1,5 +1,6 @@
 import Layout from "./Layout.jsx";
 import Login from "./Login.jsx";
+import ResetPassword from "./ResetPassword.jsx";
 import { useAuth } from "@/context/AuthContext";
 
 import UserManagement from "./UserManagement";
@@ -102,6 +103,11 @@ function PagesContent() {
         );
     }
 
+    // Check if we're on the reset password page
+    if (location.pathname === '/auth/reset-password') {
+        return <ResetPassword />;
+    }
+    
     if (!isAuthenticated) {
         return <Login />;
     }
@@ -151,6 +157,10 @@ function PagesContent() {
             <Routes>            
                 {/* Root redirect */}
                 <Route path="/" element={<Navigate to={defaultRoute} replace />} />
+                
+                {/* Public auth routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/auth/reset-password" element={<ResetPassword />} />
                 
                 {/* Public routes - Available to all approved users */}
                 <Route 

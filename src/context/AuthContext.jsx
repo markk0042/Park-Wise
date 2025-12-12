@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
-import { fetchCurrentUser, login as apiLogin } from '@/api';
+import { supabase } from '@/lib/supabaseClient';
+import { fetchCurrentUser } from '@/api';
 import { setAuthToken } from '@/api/httpClient';
 
 const AuthContext = createContext(null);
@@ -14,14 +15,78 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
   const inactivityTimerRef = useRef(null);
 
-  // Load token from localStorage on mount
+  // Load session from Supabase on mount and listen for auth changes
   useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token');
-    if (storedToken) {
-      setToken(storedToken);
-    } else {
+    // Check if we're on the reset password page - don't auto-login there
+    const isResetPasswordPage = window.location.pathname === '/auth/reset-password';
+    
+    const loadSession = async () => {
+      try {
+        if (isResetPasswordPage) {
+          console.log('🔐 On reset password page - skipping auto-login');
+          setLoading(false);
+          return;
+        }
+        
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session) {
+          console.log('🔐 Found existing Supabase session');
+          setToken(session.access_token);
+          setAuthToken(session.access_token);
+        }
+        if (error) {
+          console.error('Error loading session:', error);
+        }
+      } catch (err) {
+        console.error('Error getting session:', err);
+      } finally {
+        if (!isResetPasswordPage) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadSession();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔐 Auth state changed:', event, 'Has session:', !!session);
+      
+      // Don't set session if we're on reset password page (unless it's a password update)
+      if (isResetPasswordPage && event !== 'PASSWORD_RECOVERY' && event !== 'USER_UPDATED') {
+        console.log('🔐 On reset password page - ignoring auth state change');
+        return;
+      }
+      
+      if (session) {
+        setToken(session.access_token);
+        setAuthToken(session.access_token);
+        
+        // Sync with backend when user logs in
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          try {
+            console.log('🔄 Syncing user with backend...');
+            const user = await fetchCurrentUser();
+            setProfile(user);
+          } catch (err) {
+            console.error('Error syncing with backend:', err);
+            // Still set profile from Supabase if backend fails
+            if (session.user) {
+              // We'll fetch profile in the next useEffect
+            }
+          }
+        }
+      } else {
+        setToken(null);
+        setProfile(null);
+        setAuthToken(null);
+      }
       setLoading(false);
-    }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Set up activity listeners and inactivity timer
@@ -88,7 +153,7 @@ export function AuthProvider({ children }) {
     };
   }, [token, profile]);
 
-  // Load profile when token changes
+  // Load profile when token changes (sync with backend)
   useEffect(() => {
     const loadProfile = async () => {
       if (!token) {
@@ -100,6 +165,7 @@ export function AuthProvider({ children }) {
 
       try {
         setLoading(true);
+        // Fetch profile from backend (which syncs with Supabase)
         const user = await fetchCurrentUser();
         setProfile(user);
         setError(null);
@@ -112,6 +178,8 @@ export function AuthProvider({ children }) {
           setToken(null);
           setProfile(null);
           setAuthToken(null);
+          // Sign out from Supabase as well
+          await supabase.auth.signOut();
         } else {
           setError(err);
           setProfile(null);
@@ -130,21 +198,60 @@ export function AuthProvider({ children }) {
       loading,
       error,
       isAuthenticated: Boolean(token && profile),
-      signOut: () => {
+      signOut: async () => {
+        await supabase.auth.signOut();
         setToken(null);
         setProfile(null);
         setAuthToken(null);
       },
       signInWithPassword: async (email, password) => {
-        console.log('🔐 Signing in with email and password');
-        const { user, token: newToken } = await apiLogin(email, password);
-        
-        // Store token
-        setAuthToken(newToken);
-        setToken(newToken);
-        setProfile(user);
-        
-        return { user, token: newToken };
+        console.log('🔐 Signing in with Supabase Auth');
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Invalid email or password');
+        }
+
+        if (data.session) {
+          setToken(data.session.access_token);
+          setAuthToken(data.session.access_token);
+          
+          // Sync with backend after successful login
+          try {
+            console.log('🔄 Syncing user with backend after login...');
+            const user = await fetchCurrentUser();
+            setProfile(user);
+          } catch (err) {
+            console.error('Error syncing with backend:', err);
+            // If backend sync fails, still allow login with Supabase data
+            if (data.user) {
+              setProfile({
+                id: data.user.id,
+                email: data.user.email,
+                full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0],
+                role: 'user', // Default, will be updated when backend syncs
+                status: 'approved', // Default, will be updated when backend syncs
+              });
+            }
+          }
+        }
+
+        return { user: data.user, session: data.session };
+      },
+      resetPassword: async (email) => {
+        console.log('🔐 Requesting password reset via Supabase');
+        const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Failed to send password reset email');
+        }
+
+        return { message: 'Password reset email sent. Please check your inbox.' };
       },
     }),
     [token, profile, loading, error]
