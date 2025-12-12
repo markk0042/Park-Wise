@@ -23,34 +23,62 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
     defaultHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: { ...defaultHeaders, ...headers },
-    body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
-    signal,
-    credentials: 'include',
-  });
+  const url = `${API_BASE_URL}${path}`;
+  console.log(`🌐 [HTTP] ${method} ${url}`, { body, headers: defaultHeaders });
 
-  if (!response.ok) {
-    let errorPayload;
-    try {
-      errorPayload = await response.json();
-    } catch (err) {
-      errorPayload = { error: { message: response.statusText } };
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: { ...defaultHeaders, ...headers },
+      body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
+      credentials: 'include',
+    });
+
+    console.log(`📡 [HTTP] Response status: ${response.status} ${response.statusText}`, {
+      ok: response.ok,
+      url: response.url,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+
+    if (!response.ok) {
+      let errorPayload;
+      try {
+        errorPayload = await response.json();
+        console.error(`❌ [HTTP] Error response:`, errorPayload);
+      } catch (err) {
+        const text = await response.text();
+        errorPayload = { error: { message: response.statusText }, raw: text };
+        console.error(`❌ [HTTP] Error (non-JSON):`, errorPayload);
+      }
+      const error = new Error(errorPayload?.error?.message || 'Request failed');
+      error.status = response.status;
+      error.details = errorPayload;
+      throw error;
     }
-    const error = new Error(errorPayload?.error?.message || 'Request failed');
-    error.status = response.status;
-    error.details = errorPayload;
+
+    if (response.status === 204) {
+      console.log(`✅ [HTTP] No content (204)`);
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (contentType?.includes('application/json')) {
+      const jsonData = await response.json();
+      console.log(`✅ [HTTP] JSON response:`, jsonData);
+      return jsonData;
+    }
+    const textData = await response.text();
+    console.log(`✅ [HTTP] Text response:`, textData);
+    return textData;
+  } catch (error) {
+    console.error(`❌ [HTTP] Request failed:`, {
+      message: error.message,
+      status: error.status,
+      stack: error.stack
+    });
     throw error;
   }
-
-  if (response.status === 204) return null;
-
-  const contentType = response.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
-    return response.json();
-  }
-  return response.text();
 }
 
 export const httpClient = {

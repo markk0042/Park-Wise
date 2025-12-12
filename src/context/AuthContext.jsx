@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
-import { fetchCurrentUser, login as apiLogin, requestPasswordReset as apiRequestPasswordReset, resetPassword as apiResetPassword } from '@/api';
+import { supabase } from '@/lib/supabaseClient';
+import { fetchCurrentUser } from '@/api';
 import { setAuthToken } from '@/api/httpClient';
 
 const AuthContext = createContext(null);
@@ -14,14 +15,44 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
   const inactivityTimerRef = useRef(null);
 
-  // Load token from localStorage on mount
+  // Load session from Supabase on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token');
-    if (storedToken) {
-      setToken(storedToken);
-    } else {
+    const loadSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session) {
+          setToken(session.access_token);
+          setAuthToken(session.access_token);
+        }
+        if (error) {
+          console.error('Error loading session:', error);
+        }
+      } catch (err) {
+        console.error('Error getting session:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSession();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔐 Auth state changed:', event);
+      if (session) {
+        setToken(session.access_token);
+        setAuthToken(session.access_token);
+      } else {
+        setToken(null);
+        setProfile(null);
+        setAuthToken(null);
+      }
       setLoading(false);
-    }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Set up activity listeners and inactivity timer
@@ -130,31 +161,60 @@ export function AuthProvider({ children }) {
       loading,
       error,
       isAuthenticated: Boolean(token && profile),
-      signOut: () => {
+      signOut: async () => {
+        await supabase.auth.signOut();
         setToken(null);
         setProfile(null);
         setAuthToken(null);
       },
       signInWithPassword: async (email, password) => {
-        console.log('🔐 Signing in with email and password');
-        const { user, token: newToken } = await apiLogin(email, password);
-        
-        // Store token
-        setAuthToken(newToken);
-        setToken(newToken);
-        setProfile(user);
-        
-        return { user, token: newToken };
+        console.log('🔐 Signing in with Supabase Auth');
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Invalid email or password');
+        }
+
+        if (data.session) {
+          setToken(data.session.access_token);
+          setAuthToken(data.session.access_token);
+          // Load profile after successful login
+          try {
+            const user = await fetchCurrentUser();
+            setProfile(user);
+          } catch (err) {
+            console.error('Error loading profile:', err);
+          }
+        }
+
+        return { user: data.user, token: data.session?.access_token };
       },
       resetPassword: async (email) => {
-        console.log('🔐 Requesting password reset for:', email);
-        const result = await apiRequestPasswordReset(email);
-        return result;
+        console.log('🔐 Requesting password reset via Supabase');
+        const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/login?type=recovery`,
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Failed to send password reset email');
+        }
+
+        return { message: 'Password reset email sent. Please check your inbox.' };
       },
-      resetPasswordWithToken: async (token, password) => {
-        console.log('🔐 Resetting password with token');
-        const result = await apiResetPassword(token, password);
-        return result;
+      resetPasswordWithToken: async (newPassword) => {
+        console.log('🔐 Resetting password with Supabase');
+        const { data, error } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        if (error) {
+          throw new Error(error.message || 'Failed to reset password');
+        }
+
+        return { message: 'Password updated successfully' };
       },
     }),
     [token, profile, loading, error]

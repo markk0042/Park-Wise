@@ -6,16 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
-import { checkEmailExists, resetPassword as apiResetPassword } from '@/api';
+import { supabase } from '@/lib/supabaseClient';
 import { Shield, Lock, KeyRound } from 'lucide-react';
 
 export default function Login() {
-  const { signInWithPassword, resetPassword } = useAuth();
+  const { signInWithPassword, resetPassword, resetPasswordWithToken } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const resetToken = searchParams.get('token');
+  const resetType = searchParams.get('type'); // Supabase uses ?type=recovery
   
-  // Check if we have a reset token in URL
-  const shouldShowResetForm = !!resetToken;
+  // Check if we're in password recovery mode (Supabase sends this in URL)
+  const shouldShowResetForm = resetType === 'recovery' || window.location.hash.includes('type=recovery');
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,17 +41,22 @@ export default function Login() {
     }
   }, []);
 
-  // Check for password reset token in URL query params
+  // Check for Supabase password recovery in URL
   useEffect(() => {
-    if (resetToken) {
-      console.log('✅ [Login] Password reset token found in URL');
+    // Supabase puts recovery info in URL hash
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const type = hashParams.get('type');
+    
+    if (type === 'recovery' || shouldShowResetForm) {
+      console.log('✅ [Login] Password recovery mode detected');
       setIsResettingPasswordForm(true);
       setStatus({ 
         type: 'success', 
         message: 'Please enter your new password below.' 
       });
     }
-  }, [resetToken]);
+  }, [shouldShowResetForm]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -87,34 +92,14 @@ export default function Login() {
     }
     
     try {
-      // Request password reset - backend will handle email validation
-      // We don't check email existence first to avoid revealing if email exists
-      console.log('📧 Requesting password reset for:', email);
+      // Request password reset via Supabase
+      console.log('📧 Requesting password reset via Supabase for:', email);
       const result = await resetPassword(email);
-      console.log('📧 Password reset response:', result);
       
-      // Check if we got an error response
-      if (result?.error) {
-        throw new Error(result.error.message || 'Failed to request password reset');
-      }
-      
-      // Show the reset token if provided (development or email failed)
-      if (result?.reset_token) {
-        const resetLink = `${window.location.origin}/login?token=${result.reset_token}`;
-        setStatus({ 
-          type: 'success', 
-          message: `Password reset link: ${resetLink} (Token: ${result.reset_token})` 
-        });
-        // Also log to browser console
-        console.log('✅ Password Reset Token:', result.reset_token);
-        console.log('🔗 Reset Link:', resetLink);
-        console.log('💡 Click the link above or copy the token to reset your password');
-      } else {
-        setStatus({ 
-          type: 'success', 
-          message: 'Password reset link has been sent to your email. Please check your inbox.' 
-        });
-      }
+      setStatus({ 
+        type: 'success', 
+        message: result.message || 'Password reset link has been sent to your email. Please check your inbox.' 
+      });
       setShowForgotPassword(false);
     } catch (err) {
       console.error('❌ Password reset error:', err);
@@ -170,20 +155,16 @@ export default function Login() {
     }
     
     try {
-      if (!resetToken) {
-        throw new Error('No reset token found. Please request a new password reset.');
-      }
+      console.log('✅ Resetting password via Supabase...');
       
-      console.log('✅ Resetting password with token...');
-      
-      // Reset password using the token
-      await apiResetPassword(resetToken, newPassword);
+      // Reset password using Supabase (it handles the token from URL hash)
+      const result = await resetPasswordWithToken(newPassword);
       
       console.log('✅ Password updated successfully');
       
       setStatus({ 
         type: 'success', 
-        message: 'Password updated successfully! You can now sign in with your new password.' 
+        message: result.message || 'Password updated successfully! You can now sign in with your new password.' 
       });
       
       // Clear the form and reset state
@@ -191,7 +172,8 @@ export default function Login() {
       setConfirmPassword('');
       setIsResettingPasswordForm(false);
       
-      // Remove token from URL
+      // Clear URL hash and query params
+      window.history.replaceState({}, document.title, '/login');
       setSearchParams({});
       
       // Clear form after 2 seconds
