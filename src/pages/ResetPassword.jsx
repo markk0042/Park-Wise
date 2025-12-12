@@ -173,6 +173,13 @@ export default function ResetPasswordPage() {
             <p className="text-sm text-slate-600 text-center">
               Enter your new password below. Make sure it's at least 6 characters long.
             </p>
+            {status.type === "success" && token && (
+              <Alert className="bg-blue-50 border-blue-200">
+                <AlertDescription className="text-xs text-blue-800">
+                  <strong>Note:</strong> You may see a browser warning about Supabase redirecting you. This is normal and secure - Supabase verifies your reset link before bringing you here.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
                 New Password
