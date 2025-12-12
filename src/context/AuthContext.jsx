@@ -52,10 +52,21 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔐 Auth state changed:', event, 'Has session:', !!session);
       
-      // Don't set session if we're on reset password page (unless it's a password update)
-      if (isResetPasswordPage && event !== 'PASSWORD_RECOVERY' && event !== 'USER_UPDATED') {
-        console.log('🔐 On reset password page - ignoring auth state change');
-        return;
+      // CRITICAL: Don't auto-login if we're on the reset password page
+      // The reset link creates a session, but we want to sign out first
+      const currentPath = window.location.pathname;
+      if (currentPath === '/auth/reset-password') {
+        console.log('🔐 On reset password page - preventing auto-login');
+        // If it's a recovery event, sign out immediately
+        if (event === 'PASSWORD_RECOVERY' && session) {
+          console.log('🔐 PASSWORD_RECOVERY detected - signing out to prevent auto-login');
+          await supabase.auth.signOut();
+          return;
+        }
+        // Don't process other events on reset password page
+        if (event !== 'USER_UPDATED') {
+          return;
+        }
       }
       
       if (session) {

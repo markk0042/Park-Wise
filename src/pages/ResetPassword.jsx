@@ -19,24 +19,43 @@ export default function ResetPasswordPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Extract access token from URL hash
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.replace("#", "?"));
-    const accessToken = params.get("access_token");
-    const type = params.get("type");
+    // IMPORTANT: Sign out immediately when arriving at reset password page
+    // This prevents auto-login from the reset link token
+    const initializeResetPage = async () => {
+      try {
+        // Get current session to check if we have a recovery token
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // If we have a session, sign out first (we'll re-authenticate after password update)
+        if (session) {
+          console.log('🔐 Signing out existing session on reset password page');
+          await supabase.auth.signOut();
+        }
+      } catch (err) {
+        console.error('Error signing out:', err);
+      }
 
-    if (type === "recovery" && accessToken) {
-      setToken(accessToken);
-      setStatus({
-        type: "success",
-        message: "Please enter your new password below."
-      });
-    } else {
-      setStatus({
-        type: "error",
-        message: "Invalid or expired reset link. Please request a new password reset."
-      });
-    }
+      // Extract access token from URL hash
+      const hash = window.location.hash;
+      const params = new URLSearchParams(hash.replace("#", "?"));
+      const accessToken = params.get("access_token");
+      const type = params.get("type");
+
+      if (type === "recovery" && accessToken) {
+        setToken(accessToken);
+        setStatus({
+          type: "success",
+          message: "Please enter your new password below."
+        });
+      } else {
+        setStatus({
+          type: "error",
+          message: "Invalid or expired reset link. Please request a new password reset."
+        });
+      }
+    };
+
+    initializeResetPage();
   }, []);
 
   async function handleReset(e) {
@@ -63,7 +82,35 @@ export default function ResetPasswordPage() {
     }
 
     try {
-      // Update password using Supabase
+      // IMPORTANT: We need to set the session first using the recovery token from URL
+      // Supabase requires an active session to update the password
+      const hash = window.location.hash;
+      const params = new URLSearchParams(hash.replace("#", "?"));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const type = params.get("type");
+      
+      // Only proceed if we have a recovery token
+      if (type !== "recovery" || !accessToken) {
+        throw new Error("Invalid or expired reset link");
+      }
+      
+      if (accessToken && refreshToken) {
+        // Set the session temporarily to update password
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        
+        if (sessionError) {
+          throw sessionError;
+        }
+      } else if (accessToken) {
+        // If we only have access token, try to use it
+        // Supabase might have already set the session, so try updating directly
+      }
+
+      // Update password using Supabase (requires active session)
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {

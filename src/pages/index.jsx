@@ -103,11 +103,19 @@ function PagesContent() {
         );
     }
 
-    // Check if we're on the reset password page
-    if (location.pathname === '/auth/reset-password') {
-        return <ResetPassword />;
+    // Public routes that don't require authentication
+    // Check these BEFORE checking authentication
+    if (location.pathname === '/auth/reset-password' || location.pathname === '/login') {
+        // Don't check authentication for these pages
+        if (location.pathname === '/auth/reset-password') {
+            return <ResetPassword />;
+        }
+        if (location.pathname === '/login') {
+            return <Login />;
+        }
     }
     
+    // All other routes require authentication
     if (!isAuthenticated) {
         return <Login />;
     }
