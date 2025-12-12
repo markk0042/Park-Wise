@@ -286,33 +286,48 @@ export const updatePassword = async (userId, currentPassword, newPassword) => {
  * Only admins can use this to reset any user's password
  */
 export const adminResetPassword = async (userId, newPassword) => {
+  // Verify user exists in profiles table
   const user = await findUserById(userId);
 
   if (!user) {
     throw new Error('User not found');
   }
 
-  // Hash the new password
-  const password_hash = await hashPassword(newPassword);
+  // Use Supabase Admin API to update the password in auth.users
+  // This works for users created via Supabase Auth
+  const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+    userId,
+    { password: newPassword }
+  );
 
-  // Update password and clear any existing reset tokens
-  const { data, error } = await supabaseAdmin
+  if (authError) {
+    console.error('Error updating password via Supabase Admin API:', authError);
+    throw new Error(authError.message || 'Failed to reset password');
+  }
+
+  if (!authUser || !authUser.user) {
+    throw new Error('Failed to update password - no user returned');
+  }
+
+  // Update the profile's updated_at timestamp
+  const { data: updatedProfile, error: profileError } = await supabaseAdmin
     .from(PROFILE_TABLE)
     .update({
-      password_hash,
-      reset_token: null,
-      reset_token_expires: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId)
     .select('*')
     .single();
 
-  if (error) {
-    throw error;
+  if (profileError) {
+    console.warn('Warning: Failed to update profile timestamp:', profileError);
+    // Don't throw - password was updated successfully, timestamp update is non-critical
   }
 
-  const { password_hash: _, reset_token: __, reset_token_expires: ___, ...userWithoutSensitive } = data;
+  // Return user data without sensitive information
+  const { password_hash, reset_token, reset_token_expires, ...userWithoutSensitive } = 
+    updatedProfile || user;
+  
   return userWithoutSensitive;
 };
 
