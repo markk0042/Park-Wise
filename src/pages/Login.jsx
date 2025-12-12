@@ -228,10 +228,14 @@ export default function Login() {
       setNewPassword('');
       setConfirmPassword('');
       setIsResettingPasswordForm(false);
+      setIsRecoveryMode(false);
       
-      // Clear URL hash and query params
+      // Clear URL hash and query params - this will allow normal login flow
       window.history.replaceState({}, document.title, '/login');
       setSearchParams({});
+      
+      // Sign out from Supabase recovery session so user can log in fresh
+      await supabase.auth.signOut();
       
       // Clear form after 2 seconds
       setTimeout(() => {

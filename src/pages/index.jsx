@@ -102,7 +102,13 @@ function PagesContent() {
         );
     }
 
-    if (!isAuthenticated) {
+    // Check if we're in password recovery mode - show login even if authenticated
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const isRecovery = hashParams.get('type') === 'recovery';
+    const searchParams = new URLSearchParams(window.location.search);
+    const isRecoveryQuery = searchParams.get('type') === 'recovery';
+    
+    if (!isAuthenticated || isRecovery || isRecoveryQuery) {
         return <Login />;
     }
     

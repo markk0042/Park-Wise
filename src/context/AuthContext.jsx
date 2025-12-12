@@ -19,6 +19,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const loadSession = async () => {
       try {
+        // Check if we're in password recovery mode first
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const isRecovery = hashParams.get('type') === 'recovery';
+        
+        if (isRecovery) {
+          console.log('🔐 Password recovery mode detected - skipping auto-login');
+          setLoading(false);
+          return;
+        }
+        
         const { data: { session }, error } = await supabase.auth.getSession();
         if (session) {
           setToken(session.access_token);
@@ -38,7 +48,19 @@ export function AuthProvider({ children }) {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔐 Auth state changed:', event);
+      console.log('🔐 Auth state changed:', event, 'Has session:', !!session);
+      
+      // Check if we're in password recovery mode
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const isRecovery = hashParams.get('type') === 'recovery';
+      
+      if (isRecovery && event === 'PASSWORD_RECOVERY') {
+        console.log('🔐 Password recovery detected - keeping user on login page');
+        // Don't set token/profile during recovery - let user complete password reset first
+        setLoading(false);
+        return;
+      }
+      
       if (session) {
         setToken(session.access_token);
         setAuthToken(session.access_token);
@@ -122,6 +144,16 @@ export function AuthProvider({ children }) {
   // Load profile when token changes
   useEffect(() => {
     const loadProfile = async () => {
+      // Don't load profile if we're in recovery mode
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const isRecovery = hashParams.get('type') === 'recovery';
+      
+      if (isRecovery) {
+        console.log('🔐 In recovery mode - skipping profile load');
+        setLoading(false);
+        return;
+      }
+      
       if (!token) {
         setProfile(null);
         setError(null);
