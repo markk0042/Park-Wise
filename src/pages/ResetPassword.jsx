@@ -21,17 +21,52 @@ export default function ResetPasswordPage() {
 
   // Listen for USER_UPDATED event to know when password is successfully updated
   useEffect(() => {
+    if (!isUpdating) return; // Only listen when we're updating
+        
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'USER_UPDATED' && isUpdating) {
         console.log('✅ Password update confirmed via USER_UPDATED event');
         setPasswordUpdateSuccess(true);
+        // Stop the loading spinner
+        setIsUpdating(false);
+        
+        // Set success status
+        setStatus({
+          type: "success",
+          message: "Password updated successfully! Redirecting to login..."
+        });
+
+        // Sign out
+        supabase.auth.signOut().catch(err => {
+          console.warn('Sign out error (non-critical):', err);
+        });
+
+        // Call backend to sync (fire-and-forget)
+        const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+        if (recoveryTokens?.access_token) {
+          fetch(`${backendUrl}/auth/sync-password-reset`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${recoveryTokens.access_token}`,
+            },
+            body: JSON.stringify({ password_reset: true }),
+          }).catch(backendError => {
+            console.warn("Backend sync failed (non-critical):", backendError);
+          });
+        }
+
+        // Redirect to login
+        setTimeout(() => {
+          navigate("/login");
+        }, 1500);
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [isUpdating]);
+  }, [isUpdating, recoveryTokens, navigate]);
 
   useEffect(() => {
     // Extract tokens from URL hash BEFORE doing anything else
@@ -195,9 +230,10 @@ export default function ResetPasswordPage() {
       console.log('🔐 updateUser completed:', {
         hasError: !!updateError
       });
-
+      
       if (updateError) {
         console.error('❌ Password update error:', updateError);
+        setIsUpdating(false);
         
         // Provide user-friendly error messages
         let errorMessage = updateError.message || 'Failed to update password. Please try again.';
@@ -215,46 +251,30 @@ export default function ResetPasswordPage() {
         throw new Error(errorMessage);
       }
 
-      console.log('✅ Password updated successfully');
-
-      // Stop the loading spinner immediately - don't wait for anything else
-      setIsUpdating(false);
-
-      setStatus({
-        type: "success",
-        message: "Password updated successfully! Redirecting to login..."
-      });
-
-      // Sign out (don't await - AuthContext will also handle this on USER_UPDATED)
-      supabase.auth.signOut().catch(err => {
-        console.warn('Sign out error (non-critical):', err);
-      });
-
-      // Call backend to sync password update (fire-and-forget with timeout)
-      // This endpoint might not exist, so we use a timeout to prevent hanging
-      const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      // If updateUser completed without error, wait a moment for USER_UPDATED event
+      // The event listener will handle the success flow
+      console.log('✅ Password update initiated, waiting for USER_UPDATED event...');
       
-      fetch(`${backendUrl}/auth/sync-password-reset`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${recoveryTokens.access_token}`,
-        },
-        body: JSON.stringify({ password_reset: true }),
-        signal: controller.signal,
-      })
-        .then(() => clearTimeout(timeoutId))
-        .catch(backendError => {
-          clearTimeout(timeoutId);
-          // Silently ignore - this endpoint might not exist
+      // Give the event listener a moment to fire
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // If the event listener didn't fire (shouldn't happen), handle it here as fallback
+      if (!passwordUpdateSuccess) {
+        console.log('✅ Password updated (fallback - event listener may have missed it)');
+        setIsUpdating(false);
+        setStatus({
+          type: "success",
+          message: "Password updated successfully! Redirecting to login..."
         });
 
-      // Redirect to login after showing success message
-      setTimeout(() => {
-        navigate("/login");
-      }, 1500);
+        supabase.auth.signOut().catch(err => {
+          console.warn('Sign out error (non-critical):', err);
+        });
+
+        setTimeout(() => {
+          navigate("/login");
+        }, 1500);
+      }
     } catch (err) {
       console.error("Password reset error:", err);
       setStatus({
