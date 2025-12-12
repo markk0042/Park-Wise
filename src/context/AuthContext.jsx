@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { fetchCurrentUser } from '@/api';
+import { fetchCurrentUser, check2FAStatus, verify2FALogin } from '@/api';
 import { setAuthToken } from '@/api/httpClient';
 
 const AuthContext = createContext(null);
@@ -13,6 +13,9 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [pending2FAUserId, setPending2FAUserId] = useState(null);
+  const [twoFactorStatus, setTwoFactorStatus] = useState(null); // Store 2FA status
   const inactivityTimerRef = useRef(null);
 
   // Load session from Supabase on mount and listen for auth changes
@@ -287,7 +290,21 @@ export function AuthProvider({ children }) {
       profile,
       loading,
       error,
-      isAuthenticated: Boolean(token && profile),
+      requires2FA,
+      pending2FAUserId,
+      twoFactorStatus, // Expose 2FA status
+      isAuthenticated: Boolean(token && profile && !requires2FA),
+      refreshProfile: async () => {
+        if (!token) return;
+        try {
+          const user = await fetchCurrentUser();
+          if (user) {
+            setProfile(user);
+          }
+        } catch (err) {
+          console.error('Error refreshing profile:', err);
+        }
+      },
       signOut: async () => {
         await supabase.auth.signOut();
         setToken(null);
@@ -296,24 +313,174 @@ export function AuthProvider({ children }) {
       },
       signInWithPassword: async (email, password) => {
         console.log('🔐 Signing in with Supabase Auth');
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        console.log('🔐 Email:', email);
+        console.log('🔐 Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+        
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: email.trim().toLowerCase(), // Normalize email
+            password,
+          });
 
-        if (error) {
-          throw new Error(error.message || 'Invalid email or password');
+          if (error) {
+            console.error('🔐 Supabase login error:', {
+              message: error.message,
+              status: error.status,
+              name: error.name,
+              fullError: error
+            });
+            
+            // Provide more specific error messages
+            let errorMessage = 'Invalid email or password';
+            
+            if (error.message) {
+              const lowerMessage = error.message.toLowerCase();
+              
+              if (lowerMessage.includes('invalid login credentials') || 
+                  lowerMessage.includes('invalid password') ||
+                  lowerMessage.includes('email not found')) {
+                errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+              } else if (lowerMessage.includes('email not confirmed') || 
+                         lowerMessage.includes('email not verified')) {
+                errorMessage = 'Please verify your email address before signing in. Check your inbox for a confirmation email.';
+              } else if (lowerMessage.includes('user not found')) {
+                errorMessage = 'No account found with this email address.';
+              } else if (lowerMessage.includes('too many requests') || 
+                         lowerMessage.includes('rate limit')) {
+                errorMessage = 'Too many login attempts. Please wait a few minutes and try again.';
+              } else if (lowerMessage.includes('disabled') || 
+                         lowerMessage.includes('banned')) {
+                errorMessage = 'This account has been disabled. Please contact support.';
+              } else {
+                // Show the actual error message from Supabase
+                errorMessage = error.message;
+              }
+            }
+            
+            throw new Error(errorMessage);
+          }
+          
+          console.log('🔐 Login successful, session created');
+          
+          if (data.session) {
+            // Set temporary token to check 2FA status
+            setToken(data.session.access_token);
+            setAuthToken(data.session.access_token);
+            
+            // Sync with backend to get user profile
+            try {
+              console.log('🔄 Syncing user with backend after login...');
+              const user = await fetchCurrentUser();
+              
+              // Check if 2FA is required (non-admin users only)
+              if (user.role !== 'admin') {
+                try {
+                  const twoFactorStatusResult = await check2FAStatus();
+                  setTwoFactorStatus(twoFactorStatusResult);
+                  
+                  // For non-admin users, 2FA is MANDATORY
+                  // If not enabled, they need to set it up (handled by routing)
+                  if (twoFactorStatusResult.enabled) {
+                    console.log('🔐 2FA is enabled for this user - verification required');
+                    // Store user ID for 2FA verification
+                    setPending2FAUserId(user.id);
+                    setRequires2FA(true);
+                    // Don't set profile yet - wait for 2FA verification
+                    return { 
+                      user: data.user, 
+                      session: data.session,
+                      requires2FA: true,
+                      userId: user.id,
+                    };
+                  } else {
+                    // 2FA is mandatory but not enabled - user needs to set it up
+                    // This will be handled by the routing logic
+                    console.log('🔐 2FA is mandatory but not enabled - user must set it up');
+                  }
+                } catch (twoFactorError) {
+                  console.error('Error checking 2FA status:', twoFactorError);
+                  // If 2FA check fails, continue with normal login for now
+                  // But non-admin users should still be redirected to setup
+                }
+              } else {
+                // Admin users - 2FA is optional, set status to reflect this
+                setTwoFactorStatus({ enabled: false, required: false, isAdmin: true });
+              }
+              
+              // No 2FA required, complete login
+              setProfile(user);
+              setRequires2FA(false);
+              setPending2FAUserId(null);
+            } catch (err) {
+              console.error('Error syncing with backend:', err);
+              // If backend sync fails, still allow login with Supabase data
+              if (data.user) {
+                setProfile({
+                  id: data.user.id,
+                  email: data.user.email,
+                  full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0],
+                  role: 'user', // Default, will be updated when backend syncs
+                  status: 'approved', // Default, will be updated when backend syncs
+                });
+              }
+            }
+          }
+
+          return { user: data.user, session: data.session };
+        } catch (err) {
+          // Re-throw the error so it can be caught by the Login component
+          throw err;
         }
 
         if (data.session) {
+          // Set temporary token to check 2FA status
           setToken(data.session.access_token);
           setAuthToken(data.session.access_token);
           
-          // Sync with backend after successful login
+          // Sync with backend to get user profile
           try {
             console.log('🔄 Syncing user with backend after login...');
             const user = await fetchCurrentUser();
+            
+            // Check if 2FA is required (non-admin users only)
+            if (user.role !== 'admin') {
+              try {
+                const twoFactorStatusResult = await check2FAStatus();
+                setTwoFactorStatus(twoFactorStatusResult);
+                
+                // For non-admin users, 2FA is MANDATORY
+                // If not enabled, they need to set it up (handled by routing)
+                if (twoFactorStatusResult.enabled) {
+                  console.log('🔐 2FA is enabled for this user - verification required');
+                  // Store user ID for 2FA verification
+                  setPending2FAUserId(user.id);
+                  setRequires2FA(true);
+                  // Don't set profile yet - wait for 2FA verification
+                  return { 
+                    user: data.user, 
+                    session: data.session,
+                    requires2FA: true,
+                    userId: user.id,
+                  };
+                } else {
+                  // 2FA is mandatory but not enabled - user needs to set it up
+                  // This will be handled by the routing logic
+                  console.log('🔐 2FA is mandatory but not enabled - user must set it up');
+                }
+              } catch (twoFactorError) {
+                console.error('Error checking 2FA status:', twoFactorError);
+                // If 2FA check fails, continue with normal login for now
+                // But non-admin users should still be redirected to setup
+              }
+            } else {
+              // Admin users - 2FA is optional, set status to reflect this
+              setTwoFactorStatus({ enabled: false, required: false, isAdmin: true });
+            }
+            
+            // No 2FA required, complete login
             setProfile(user);
+            setRequires2FA(false);
+            setPending2FAUserId(null);
           } catch (err) {
             console.error('Error syncing with backend:', err);
             // If backend sync fails, still allow login with Supabase data
@@ -330,6 +497,34 @@ export function AuthProvider({ children }) {
         }
 
         return { user: data.user, session: data.session };
+      },
+      verify2FA: async (code) => {
+        if (!pending2FAUserId) {
+          throw new Error('No pending 2FA verification');
+        }
+
+        console.log('🔐 Verifying 2FA code...');
+        const result = await verify2FALogin(pending2FAUserId, code);
+        
+        if (result.verified) {
+          // 2FA verified, complete login
+          const user = await fetchCurrentUser();
+          setProfile(user);
+          setRequires2FA(false);
+          setPending2FAUserId(null);
+          return { verified: true };
+        } else {
+          throw new Error('Invalid 2FA code');
+        }
+      },
+      cancel2FA: () => {
+        // Cancel 2FA and sign out
+        setRequires2FA(false);
+        setPending2FAUserId(null);
+        setToken(null);
+        setProfile(null);
+        setAuthToken(null);
+        supabase.auth.signOut();
       },
       resetPassword: async (email) => {
         console.log('🔐 Requesting password reset via Supabase');

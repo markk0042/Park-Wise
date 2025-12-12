@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/context/AuthContext';
 import { Shield, Lock } from 'lucide-react';
+import TwoFactorVerification from '@/components/TwoFactorVerification';
 
 export default function Login() {
-  const { signInWithPassword, resetPassword, isAuthenticated, profile } = useAuth();
+  const { signInWithPassword, resetPassword, isAuthenticated, profile, requires2FA, cancel2FA } = useAuth();
   const navigate = useNavigate();
   
   const [email, setEmail] = useState('');
@@ -53,9 +54,15 @@ export default function Login() {
     }
     
     try {
-      await signInWithPassword(email, password);
-      // Success - user will be redirected automatically via auth state change
-      setStatus({ type: 'success', message: 'Signing in...' });
+      const result = await signInWithPassword(email, password);
+      // Check if 2FA is required
+      if (result?.requires2FA) {
+        // Don't show error, 2FA component will be shown
+        setStatus({ type: null, message: '' });
+      } else {
+        // Success - user will be redirected automatically via auth state change
+        setStatus({ type: 'success', message: 'Signing in...' });
+      }
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Invalid email or password' });
     } finally {
@@ -91,6 +98,11 @@ export default function Login() {
       setIsResettingPassword(false);
     }
   };
+
+  // Show 2FA verification if required
+  if (requires2FA) {
+    return <TwoFactorVerification onCancel={cancel2FA} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">

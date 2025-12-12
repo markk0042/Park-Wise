@@ -1,6 +1,7 @@
 import Layout from "./Layout.jsx";
 import Login from "./Login.jsx";
 import ResetPassword from "./ResetPassword.jsx";
+import TwoFactorSetup from "./TwoFactorSetup.jsx";
 import { useAuth } from "@/context/AuthContext";
 
 import UserManagement from "./UserManagement";
@@ -30,8 +31,11 @@ import DeleteAllVehicles from "./DeleteAllVehicles";
 import TrendAnalysis from "./TrendAnalysis";
 
 import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { Clock, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { check2FAStatus, fetchCurrentUser } from '@/api';
 
 const PAGES = {
     
@@ -80,9 +84,43 @@ function _getCurrentPage(url) {
 function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
+    const [checking2FA, setChecking2FA] = useState(false);
     
     // Call useAuth to get authentication state
-    const { isAuthenticated, loading, error, profile: user } = useAuth();
+    const { isAuthenticated, loading, error, profile: user, twoFactorStatus, token, refreshProfile } = useAuth();
+    
+    // Check 2FA status for non-admin users if not already loaded
+    useEffect(() => {
+        const checkMandatory2FA = async () => {
+            // Only check for non-admin, approved users who are authenticated
+            if (!isAuthenticated || !user || user.role === 'admin' || user.status !== 'approved') {
+                return;
+            }
+            
+            // If already on setup page, don't check
+            if (location.pathname === '/2fa/setup') {
+                return;
+            }
+            
+            // If twoFactorStatus is not loaded, fetch it
+            if (!twoFactorStatus && token && !checking2FA) {
+                setChecking2FA(true);
+                try {
+                    const status = await check2FAStatus();
+                    // If 2FA is required but not enabled, redirect to setup
+                    if (status.required && !status.enabled) {
+                        window.location.href = '/2fa/setup';
+                    }
+                } catch (err) {
+                    console.error('Error checking 2FA status:', err);
+                } finally {
+                    setChecking2FA(false);
+                }
+            }
+        };
+        
+        checkMandatory2FA();
+    }, [isAuthenticated, user, twoFactorStatus, token, location.pathname, checking2FA]);
 
     if (loading) {
         return (
@@ -115,29 +153,86 @@ function PagesContent() {
         }
     }
     
+    // 2FA setup route - requires authentication but accessible to non-admin users
+    if (location.pathname === '/2fa/setup') {
+        if (!isAuthenticated) {
+            return <Login />;
+        }
+        // Allow access even if 2FA is not set up yet
+        return <TwoFactorSetup />;
+    }
+    
     // All other routes require authentication
     if (!isAuthenticated) {
         return <Login />;
     }
     
+    // MANDATORY 2FA CHECK: For non-admin users, 2FA is REQUIRED
+    // Block access to all pages except /2fa/setup if 2FA is not enabled
+    if (user?.role !== 'admin' && user?.status === 'approved' && location.pathname !== '/2fa/setup') {
+        if (twoFactorStatus) {
+            if (twoFactorStatus.required && !twoFactorStatus.enabled) {
+                // Non-admin user without 2FA - redirect to setup
+                return <Navigate to="/2fa/setup" replace />;
+            }
+        } else if (checking2FA) {
+            // Still checking 2FA status, show loading
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
+                </div>
+            );
+        }
+    }
+    
     // Block pending users from accessing the app
     if (user?.status === 'pending') {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-                <div className="max-w-md text-center space-y-4">
-                    <div className="w-16 h-16 mx-auto bg-amber-100 rounded-full flex items-center justify-center">
-                        <Clock className="w-8 h-8 text-amber-600" />
+        const PendingApprovalScreen = () => {
+            const [refreshing, setRefreshing] = useState(false);
+            const { refreshProfile } = useAuth();
+            
+            const handleRefresh = async () => {
+                setRefreshing(true);
+                try {
+                    // Refresh profile from backend
+                    await refreshProfile();
+                    // Reload page to check updated status
+                    setTimeout(() => window.location.reload(), 500);
+                } catch (err) {
+                    console.error('Error refreshing profile:', err);
+                    // Still reload to get fresh data
+                    window.location.reload();
+                } finally {
+                    setRefreshing(false);
+                }
+            };
+            
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+                    <div className="max-w-md text-center space-y-4">
+                        <div className="w-16 h-16 mx-auto bg-amber-100 rounded-full flex items-center justify-center">
+                            <Clock className="w-8 h-8 text-amber-600" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-slate-900">Account Pending Approval</h2>
+                        <p className="text-slate-600">
+                            Your account is waiting for super admin approval. You will be able to access the app once your request has been approved.
+                        </p>
+                        <p className="text-sm text-slate-500">
+                            If you were just approved, click the button below to refresh your status.
+                        </p>
+                        <Button
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                            className="mt-4"
+                        >
+                            {refreshing ? 'Refreshing...' : 'Refresh Status'}
+                        </Button>
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900">Account Pending Approval</h2>
-                    <p className="text-slate-600">
-                        Your account is waiting for super admin approval. You will be able to access the app once your request has been approved.
-                    </p>
-                    <p className="text-sm text-slate-500">
-                        Please contact the super admin or wait for approval notification.
-                    </p>
                 </div>
-            </div>
-        );
+            );
+        };
+        
+        return <PendingApprovalScreen />;
     }
 
     // Block rejected users
@@ -169,6 +264,9 @@ function PagesContent() {
                 {/* Public auth routes */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/auth/reset-password" element={<ResetPassword />} />
+                
+                {/* 2FA Setup - requires auth */}
+                <Route path="/2fa/setup" element={<TwoFactorSetup />} />
                 
                 {/* Public routes - Available to all approved users */}
                 <Route 

@@ -12,6 +12,13 @@ import {
   adminResetPassword,
 } from '../services/auth.service.js';
 import { sendPasswordResetEmail } from '../services/email.service.js';
+import {
+  generateTwoFactorSecret,
+  verifyTwoFactorCode,
+  enableTwoFactor,
+  disableTwoFactor,
+  isTwoFactorEnabled,
+} from '../services/twoFactor.service.js';
 
 const updateMeSchema = z.object({
   full_name: z.string().min(1).optional(),
@@ -390,5 +397,140 @@ export const adminResetUserPassword = async (req, res, next) => {
       return next(createError(404, 'User not found'));
     }
     next(createError(400, err.message || 'Failed to reset user password'));
+  }
+};
+
+// ==================== 2FA Endpoints ====================
+
+/**
+ * Generate 2FA secret and QR code for setup
+ * Only for non-admin users
+ */
+export const generate2FASecret = async (req, res, next) => {
+  try {
+    // Only allow non-admin users to set up 2FA
+    if (req.user.role === 'admin') {
+      return next(createError(403, '2FA is not required for admin users'));
+    }
+
+    const { secret, qrCodeUrl, backupCodes } = await generateTwoFactorSecret(
+      req.user.id,
+      req.user.email
+    );
+
+    res.json({
+      secret,
+      qrCodeUrl,
+      backupCodes, // User must save these immediately
+      message: '2FA secret generated. Verify with a code to enable.',
+    });
+  } catch (err) {
+    next(createError(500, err.message || 'Failed to generate 2FA secret'));
+  }
+};
+
+/**
+ * Verify 2FA setup code and enable 2FA
+ * Only for non-admin users
+ */
+export const verify2FASetup = async (req, res, next) => {
+  try {
+    // Only allow non-admin users
+    if (req.user.role === 'admin') {
+      return next(createError(403, '2FA is not required for admin users'));
+    }
+
+    const schema = z.object({
+      code: z.string().length(6, 'Code must be 6 digits'),
+    });
+    const { code } = schema.parse(req.body);
+
+    // Verify the code
+    const isValid = await verifyTwoFactorCode(req.user.id, code);
+
+    if (!isValid) {
+      return next(createError(400, 'Invalid verification code'));
+    }
+
+    // Enable 2FA
+    await enableTwoFactor(req.user.id);
+
+    res.json({
+      message: '2FA has been enabled successfully',
+      enabled: true,
+    });
+  } catch (err) {
+    next(createError(400, err.message || 'Failed to verify 2FA setup'));
+  }
+};
+
+/**
+ * Verify 2FA code during login
+ * Public endpoint (no auth required)
+ */
+export const verify2FALogin = async (req, res, next) => {
+  try {
+    const schema = z.object({
+      userId: z.string().uuid(),
+      code: z.string().min(6, 'Code must be at least 6 characters'),
+    });
+    const { userId, code } = schema.parse(req.body);
+
+    // Verify the code
+    const isValid = await verifyTwoFactorCode(userId, code);
+
+    if (!isValid) {
+      return next(createError(401, 'Invalid 2FA code'));
+    }
+
+    res.json({
+      verified: true,
+      message: '2FA verification successful',
+    });
+  } catch (err) {
+    next(createError(401, err.message || '2FA verification failed'));
+  }
+};
+
+/**
+ * Check if user has 2FA enabled
+ * Returns whether 2FA is enabled and whether it's mandatory
+ */
+export const check2FAStatus = async (req, res, next) => {
+  try {
+    const enabled = await isTwoFactorEnabled(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    const required = !isAdmin; // 2FA is MANDATORY for non-admin users
+
+    res.json({
+      enabled,
+      required, // true for non-admin users (mandatory), false for admins (optional)
+      isAdmin,
+    });
+  } catch (err) {
+    next(createError(500, err.message || 'Failed to check 2FA status'));
+  }
+};
+
+/**
+ * Disable 2FA for a user
+ * Only admins can disable 2FA (it's mandatory for non-admin users)
+ */
+export const disable2FA = async (req, res, next) => {
+  try {
+    // Only allow admins to disable 2FA
+    // Non-admin users have mandatory 2FA and cannot disable it
+    if (req.user.role !== 'admin') {
+      return next(createError(403, '2FA is mandatory for non-admin users and cannot be disabled'));
+    }
+
+    await disableTwoFactor(req.user.id);
+
+    res.json({
+      message: '2FA has been disabled successfully',
+      enabled: false,
+    });
+  } catch (err) {
+    next(createError(500, err.message || 'Failed to disable 2FA'));
   }
 };

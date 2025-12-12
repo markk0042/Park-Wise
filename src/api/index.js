@@ -55,6 +55,32 @@ export const updatePassword = async (currentPassword, newPassword) => {
   return result;
 };
 
+// 2FA endpoints
+export const check2FAStatus = async () => {
+  const result = await httpClient.get('/auth/2fa/status');
+  return result;
+};
+
+export const generate2FASecret = async () => {
+  const result = await httpClient.post('/auth/2fa/generate');
+  return result;
+};
+
+export const verify2FASetup = async (code) => {
+  const result = await httpClient.post('/auth/2fa/verify-setup', { code });
+  return result;
+};
+
+export const verify2FALogin = async (userId, code) => {
+  const result = await httpClient.post('/auth/verify-2fa-login', { userId, code });
+  return result;
+};
+
+export const disable2FA = async () => {
+  const result = await httpClient.post('/auth/2fa/disable');
+  return result;
+};
+
 // Vehicles
 export const fetchVehicles = async (orderBy = 'permit_number') => {
   const { vehicles } = await httpClient.get(`/vehicles?orderBy=${orderBy}`);
