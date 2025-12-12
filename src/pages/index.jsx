@@ -31,7 +31,7 @@ import DeleteAllVehicles from "./DeleteAllVehicles";
 import TrendAnalysis from "./TrendAnalysis";
 
 import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Clock, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -89,6 +89,9 @@ function PagesContent() {
     // Call useAuth to get authentication state
     const { isAuthenticated, loading, error, profile: user, twoFactorStatus, token, refreshProfile } = useAuth();
     
+    // Use ref to track if we're checking 2FA to prevent infinite loops
+    const checking2FARef = useRef(false);
+    
     // Check 2FA status for non-admin users if not already loaded
     useEffect(() => {
         const checkMandatory2FA = async () => {
@@ -102,25 +105,37 @@ function PagesContent() {
                 return;
             }
             
-            // If twoFactorStatus is not loaded, fetch it
-            if (!twoFactorStatus && token && !checking2FA) {
-                setChecking2FA(true);
-                try {
-                    const status = await check2FAStatus();
-                    // If 2FA is required but not enabled, redirect to setup
-                    if (status.required && !status.enabled) {
-                        window.location.href = '/2fa/setup';
-                    }
-                } catch (err) {
-                    console.error('Error checking 2FA status:', err);
-                } finally {
-                    setChecking2FA(false);
+            // If twoFactorStatus is already loaded, don't check again
+            if (twoFactorStatus) {
+                return;
+            }
+            
+            // If we're already checking, don't check again
+            if (checking2FARef.current) {
+                return;
+            }
+            
+            // Mark as checking
+            checking2FARef.current = true;
+            setChecking2FA(true);
+            
+            try {
+                const status = await check2FAStatus();
+                
+                // If 2FA is required but not enabled, redirect to setup
+                if (status.required && !status.enabled) {
+                    window.location.href = '/2fa/setup';
                 }
+            } catch (err) {
+                console.error('Error checking 2FA status:', err);
+            } finally {
+                checking2FARef.current = false;
+                setChecking2FA(false);
             }
         };
         
         checkMandatory2FA();
-    }, [isAuthenticated, user, twoFactorStatus, token, location.pathname, checking2FA]);
+    }, [isAuthenticated, user, twoFactorStatus, token, location.pathname]); // Removed checking2FA from dependencies
 
     if (loading) {
         return (
