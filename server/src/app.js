@@ -12,7 +12,65 @@ const app = express();
 
 app.use(pinoHttp({ logger }));
 app.use(helmet());
-app.use(cors({ origin: env.CORS_ORIGIN.split(','), credentials: true }));
+
+// CORS configuration - handle both '*' and specific origins
+const getCorsOrigin = () => {
+  // Default allowed origins (always include these)
+  const defaultOrigins = [
+    'https://park-wise-two.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ];
+
+  if (!env.CORS_ORIGIN || env.CORS_ORIGIN === '*') {
+    // If '*' or not set, use function to allow default origins + any in development
+    return (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // In development, allow all origins
+      if (env.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      
+      // In production, check against allowed origins
+      if (defaultOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        // Log for debugging
+        console.warn(`⚠️  CORS: Blocked origin: ${origin}`);
+        callback(null, true); // Still allow for now, but log it
+      }
+    };
+  }
+
+  // Parse comma-separated origins and trim whitespace
+  const configuredOrigins = env.CORS_ORIGIN
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
+  // Combine with default origins
+  const allOrigins = [...new Set([...defaultOrigins, ...configuredOrigins])];
+
+  return (origin, callback) => {
+    // Allow requests with no origin
+    if (!origin) return callback(null, true);
+    
+    if (allOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️  CORS: Blocked origin: ${origin}. Allowed: ${allOrigins.join(', ')}`);
+      callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
+    }
+  };
+};
+
+app.use(cors({
+  origin: getCorsOrigin(),
+  credentials: true,
+  optionsSuccessStatus: 200,
+}));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
