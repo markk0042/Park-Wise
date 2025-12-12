@@ -23,6 +23,7 @@ export default function UserManagement() {
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [resetPasswordUserId, setResetPasswordUserId] = useState(null);
   const [resetPasswordEmail, setResetPasswordEmail] = useState('');
+  const [isResettingOwnPassword, setIsResettingOwnPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetPasswordError, setResetPasswordError] = useState('');
@@ -79,18 +80,30 @@ export default function UserManagement() {
       setResetPasswordDialogOpen(false);
       setResetPasswordUserId(null);
       setResetPasswordEmail('');
+      setIsResettingOwnPassword(false);
       setNewPassword('');
       setConfirmPassword('');
       setResetPasswordError('');
     },
     onError: (error) => {
-      setResetPasswordError(error.message || 'Failed to reset password');
+      console.error('Password reset error:', error);
+      // Extract error message from various error formats
+      let errorMessage = 'Failed to reset password';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.details?.error?.message) {
+        errorMessage = error.details.error.message;
+      } else if (error?.response?.data?.error?.message) {
+        errorMessage = error.response.data.error.message;
+      }
+      setResetPasswordError(errorMessage);
     },
   });
 
   const handleResetPassword = (userId, email) => {
     setResetPasswordUserId(userId);
     setResetPasswordEmail(email);
+    setIsResettingOwnPassword(userId === currentUser?.id);
     setNewPassword('');
     setConfirmPassword('');
     setResetPasswordError('');
@@ -115,6 +128,17 @@ export default function UserManagement() {
       setResetPasswordError('Passwords do not match');
       return;
     }
+
+    if (!resetPasswordUserId) {
+      setResetPasswordError('User ID is missing. Please try again.');
+      return;
+    }
+
+    console.log('🔐 Resetting password for user:', {
+      userId: resetPasswordUserId,
+      email: resetPasswordEmail,
+      passwordLength: newPassword.length
+    });
 
     resetPasswordMutation.mutate({
       userId: resetPasswordUserId,
@@ -289,9 +313,11 @@ export default function UserManagement() {
         <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Reset Password</DialogTitle>
+              <DialogTitle>{isResettingOwnPassword ? 'Reset Your Password' : 'Reset Password'}</DialogTitle>
               <DialogDescription>
-                Reset password for {resetPasswordEmail}. The user will be able to log in with this new password immediately.
+                {isResettingOwnPassword 
+                  ? `You are resetting your own password. You will be able to log in with this new password immediately.`
+                  : `Reset password for ${resetPasswordEmail}. The user will be able to log in with this new password immediately.`}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleResetPasswordSubmit}>
@@ -334,6 +360,7 @@ export default function UserManagement() {
                     setResetPasswordDialogOpen(false);
                     setResetPasswordUserId(null);
                     setResetPasswordEmail('');
+                    setIsResettingOwnPassword(false);
                     setNewPassword('');
                     setConfirmPassword('');
                     setResetPasswordError('');
@@ -491,16 +518,22 @@ export default function UserManagement() {
                                   )}
                                 </>
                               )}
-                              {/* Admin can reset any user's password */}
-                              {currentUser?.role === 'admin' && user.id !== currentUser.id && (
+                              {/* Admin can reset any user's password (including their own) */}
+                              {currentUser?.role === 'admin' && (
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleResetPassword(user.id, user.email)}
-                                  className="text-xs px-2 py-1 h-8 whitespace-nowrap border-blue-300 text-blue-700 hover:bg-blue-50"
+                                  className={`text-xs px-2 py-1 h-8 whitespace-nowrap ${
+                                    user.id === currentUser.id 
+                                      ? 'border-amber-300 text-amber-700 hover:bg-amber-50' 
+                                      : 'border-blue-300 text-blue-700 hover:bg-blue-50'
+                                  }`}
                                 >
                                   <KeyRound className="w-3 h-3 sm:mr-1" />
-                                  <span className="hidden sm:inline">Reset Password</span>
+                                  <span className="hidden sm:inline">
+                                    {user.id === currentUser.id ? 'Reset My Password' : 'Reset Password'}
+                                  </span>
                                 </Button>
                               )}
                               {isSuperAdmin && user.id !== currentUser.id && (

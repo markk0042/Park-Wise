@@ -333,19 +333,37 @@ export const updatePassword = async (req, res, next) => {
 // Admin reset user password (no current password required)
 export const adminResetUserPassword = async (req, res, next) => {
   try {
-    const schema = z.object({
-      password: z.string().min(6)
+    console.log('🔐 Admin reset password request:', {
+      userId: req.params.id,
+      body: req.body,
+      bodyType: typeof req.body.password
     });
-    const { password } = schema.parse(req.body);
-    const userId = req.params.id;
     
-    // Prevent admins from resetting their own password via this endpoint
-    // (they should use the regular update-password endpoint)
-    if (userId === req.user.id) {
-      return next(createError(400, 'Cannot reset your own password via this endpoint. Use /api/auth/update-password instead.'));
+    const schema = z.object({
+      password: z.string().min(6, 'Password must be at least 6 characters long')
+    });
+    
+    // Validate request body
+    const validationResult = schema.safeParse(req.body);
+    if (!validationResult.success) {
+      console.error('❌ Validation failed:', validationResult.error.errors);
+      const errorMessages = validationResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      return next(createError(400, `Validation error: ${errorMessages}`));
     }
     
+    const { password } = validationResult.data;
+    const userId = req.params.id;
+    
+    if (!userId) {
+      return next(createError(400, 'User ID is required'));
+    }
+    
+    console.log('✅ Validation passed, resetting password for user:', userId);
+    
+    // Allow admins to reset their own password or any other user's password
     const user = await adminResetPassword(userId, password);
+    
+    console.log('✅ Password reset successful for user:', user.email);
     
     res.json({
       message: 'User password has been reset successfully',
@@ -358,6 +376,19 @@ export const adminResetUserPassword = async (req, res, next) => {
       }
     });
   } catch (err) {
+    console.error('❌ Error in adminResetUserPassword:', {
+      message: err.message,
+      code: err.code,
+      details: err.details,
+      stack: err.stack
+    });
+    // Check if it's a known error type
+    if (err.message === 'User not found') {
+      return next(createError(404, err.message));
+    }
+    if (err.code === 'PGRST116') {
+      return next(createError(404, 'User not found'));
+    }
     next(createError(400, err.message || 'Failed to reset user password'));
   }
 };
