@@ -16,7 +16,22 @@ export default function ResetPasswordPage() {
   const [recoveryTokens, setRecoveryTokens] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [status, setStatus] = useState({ type: null, message: "" });
+  const [passwordUpdateSuccess, setPasswordUpdateSuccess] = useState(false);
   const navigate = useNavigate();
+
+  // Listen for USER_UPDATED event to know when password is successfully updated
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'USER_UPDATED' && isUpdating) {
+        console.log('✅ Password update confirmed via USER_UPDATED event');
+        setPasswordUpdateSuccess(true);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isUpdating]);
 
   useEffect(() => {
     // Extract tokens from URL hash BEFORE doing anything else
@@ -195,29 +210,16 @@ export default function ResetPasswordPage() {
       console.log('✅ Session user ID:', sessionData.session.user?.id);
 
       // Update password using Supabase (requires active session)
-      // Add timeout to prevent hanging
-      const updatePromise = supabase.auth.updateUser({ 
+      console.log('🔐 Calling updateUser...');
+      
+      // Update password - this will trigger USER_UPDATED event when successful
+      const { error: updateError } = await supabase.auth.updateUser({ 
         password: password 
       });
-      const updateTimeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Password update timed out. Please try again.')), 15000)
-      );
       
-      let updateError;
-      try {
-        const result = await Promise.race([updatePromise, updateTimeoutPromise]);
-        updateError = result.error;
-      } catch (err) {
-        if (err.message?.includes('timed out')) {
-          throw err;
-        }
-        // If it's an error from updateUser, extract it
-        if (err.error) {
-          updateError = err.error;
-        } else {
-          throw err;
-        }
-      }
+      console.log('🔐 updateUser completed:', {
+        hasError: !!updateError
+      });
 
       if (updateError) {
         console.error('❌ Password update error:', updateError);
