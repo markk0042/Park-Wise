@@ -156,40 +156,15 @@ export default function ResetPasswordPage() {
       });
       console.log('🔐 Calling setSession...');
       
-      // Add timeout to prevent hanging
-      const sessionPromise = supabase.auth.setSession(sessionPayload);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => {
-          console.error('⏱️ Session setup timed out after 10 seconds');
-          reject(new Error('Session setup timed out. Please try again.'));
-        }, 10000)
-      );
+      // Set session - Supabase handles this synchronously for recovery tokens
+      console.log('🔐 Waiting for setSession response...');
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession(sessionPayload);
       
-      let sessionData, sessionError;
-      try {
-        console.log('🔐 Waiting for setSession response...');
-        const result = await Promise.race([sessionPromise, timeoutPromise]);
-        console.log('🔐 setSession response received:', {
-          hasData: !!result.data,
-          hasError: !!result.error,
-          hasSession: !!result.data?.session
-        });
-        sessionData = result.data;
-        sessionError = result.error;
-      } catch (err) {
-        console.error('🔐 setSession error caught:', err);
-        if (err.message?.includes('timed out')) {
-          throw err;
-        }
-        // If it's an error from setSession, extract it
-        if (err.error) {
-          sessionError = err.error;
-        } else if (err.message) {
-          throw err;
-        } else {
-          throw new Error('Failed to set session. Please try again.');
-        }
-      }
+      console.log('🔐 setSession response received:', {
+        hasData: !!sessionData,
+        hasError: !!sessionError,
+        hasSession: !!sessionData?.session
+      });
       
       if (sessionError) {
         console.error('❌ Session error:', sessionError);

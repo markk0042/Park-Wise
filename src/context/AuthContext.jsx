@@ -37,16 +37,22 @@ export function AuthProvider({ children }) {
             if (userError || !user) {
               console.log('🔐 Session is invalid, clearing...');
               await supabase.auth.signOut();
+              setToken(null);
+              setProfile(null);
+              setAuthToken(null);
               setLoading(false);
               return;
             }
-            // Session is valid, set token
-            setToken(session.access_token);
-            setAuthToken(session.access_token);
+            // Session is valid, but we still need to verify with backend
+            // Don't set token yet - let the profile load verify it
+            console.log('🔐 Session found, will verify with backend...');
           } catch (verifyError) {
             console.error('Error verifying session:', verifyError);
             // If we can't verify, clear the session
             await supabase.auth.signOut();
+            setToken(null);
+            setProfile(null);
+            setAuthToken(null);
             setLoading(false);
             return;
           }
@@ -100,17 +106,35 @@ export function AuthProvider({ children }) {
         setToken(session.access_token);
         setAuthToken(session.access_token);
         
-        // Sync with backend when user logs in
+        // Sync with backend when user logs in or token is refreshed
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           try {
             console.log('🔄 Syncing user with backend...');
             const user = await fetchCurrentUser();
-            setProfile(user);
+            if (user) {
+              setProfile(user);
+            } else {
+              // Backend returned no user - clear session
+              console.log('🔐 Backend returned no user - clearing session');
+              setToken(null);
+              setProfile(null);
+              setAuthToken(null);
+              await supabase.auth.signOut();
+            }
           } catch (err) {
             console.error('Error syncing with backend:', err);
-            // Still set profile from Supabase if backend fails
-            if (session.user) {
-              // We'll fetch profile in the next useEffect
+            // If backend fails (401, etc.), clear session
+            if (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+              console.log('🔐 Backend authentication failed - clearing session');
+              setToken(null);
+              setProfile(null);
+              setAuthToken(null);
+              await supabase.auth.signOut();
+            } else {
+              // Other errors - still try to set profile from Supabase
+              if (session.user) {
+                // We'll fetch profile in the next useEffect
+              }
             }
           }
         }
