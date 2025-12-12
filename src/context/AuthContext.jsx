@@ -107,6 +107,8 @@ export function AuthProvider({ children }) {
         // Handle 401 errors gracefully (session expired or invalid)
         if (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
           console.log('🔒 Session expired or invalid - clearing session');
+          // Store session expiration reason for Login page to display
+          sessionStorage.setItem('session_expired', 'true');
           setToken(null);
           setProfile(null);
           setAuthToken(null);

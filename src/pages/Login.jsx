@@ -28,6 +28,19 @@ export default function Login() {
   const [isResettingPasswordForm, setIsResettingPasswordForm] = useState(shouldShowResetForm);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
+  // Check for session expiration
+  useEffect(() => {
+    const sessionExpired = sessionStorage.getItem('session_expired');
+    if (sessionExpired === 'true') {
+      setStatus({ 
+        type: 'error', 
+        message: 'Your session has expired. Please log in again.' 
+      });
+      // Clear the flag so it doesn't show again
+      sessionStorage.removeItem('session_expired');
+    }
+  }, []);
+
   // Check for password reset token in URL query params
   useEffect(() => {
     if (resetToken) {

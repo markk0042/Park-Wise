@@ -13,7 +13,19 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
   CLEANUP_SECRET_TOKEN: z.string().optional(), // Secret token for cleanup endpoint (for cron jobs)
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters').optional()
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters').optional(),
+  // Email configuration (optional - for password reset emails)
+  FRONTEND_URL: z.string().optional(), // Frontend URL for reset links
+  EMAIL_FROM: z.string().email().optional(), // From email address
+  // SMTP configuration
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_SECURE: z.string().optional(), // 'true' or 'false'
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  // Gmail configuration (alternative to SMTP)
+  GMAIL_USER: z.string().email().optional(),
+  GMAIL_APP_PASSWORD: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

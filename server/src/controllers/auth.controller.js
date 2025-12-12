@@ -11,6 +11,7 @@ import {
   updatePassword as updateUserPassword,
   adminResetPassword,
 } from '../services/auth.service.js';
+import { sendPasswordResetEmail } from '../services/email.service.js';
 
 const updateMeSchema = z.object({
   full_name: z.string().min(1).optional(),
@@ -210,16 +211,30 @@ export const requestPasswordReset = async (req, res, next) => {
     // Set reset token
     const { reset_token, user } = await setPasswordResetToken(email);
     
-    // In production, you would send an email here with the reset link
-    // For now, we'll return the token (remove this in production!)
-    // TODO: Send email with reset link: ${process.env.FRONTEND_URL}/reset-password?token=${reset_token}
+    // Send password reset email
+    try {
+      await sendPasswordResetEmail(email, reset_token);
+      console.log(`✅ Password reset email sent to ${email}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send password reset email:', emailError);
+      // Still return success to user (don't reveal if email exists)
+      // But log the error for debugging
+    }
     
     res.json({
-      message: 'Password reset link has been sent to your email',
-      // Remove this in production - only for testing
+      message: 'If the email exists, a password reset link has been sent to your email',
+      // In development, also return token for testing (remove in production)
       reset_token: process.env.NODE_ENV === 'development' ? reset_token : undefined
     });
   } catch (err) {
+    // Log error for debugging
+    console.error('❌ Password reset request error:', err);
+    console.error('Error details:', {
+      message: err.message,
+      stack: err.stack,
+      status: err.status || err.statusCode
+    });
+    
     // Don't reveal if email exists or not (security best practice)
     res.json({
       message: 'If the email exists, a password reset link has been sent'

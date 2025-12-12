@@ -6,7 +6,7 @@ import { env } from '../config/env.js';
 
 const PROFILE_TABLE = 'profiles';
 const JWT_SECRET = env.JWT_SECRET || process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_EXPIRES_IN = '7d'; // Token expires in 7 days
+const JWT_EXPIRES_IN = '24h'; // Token expires in 24 hours for improved security
 const RESET_TOKEN_EXPIRES_IN = 3600000; // 1 hour in milliseconds
 
 /**

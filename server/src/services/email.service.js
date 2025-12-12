@@ -1,0 +1,184 @@
+import nodemailer from 'nodemailer';
+import { env } from '../config/env.js';
+
+/**
+ * Create email transporter
+ * Supports SMTP, Gmail, and other email services
+ */
+const createTransporter = () => {
+  // If SMTP is configured, use it
+  if (env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER && env.SMTP_PASS) {
+    return nodemailer.createTransport({
+      host: env.SMTP_HOST,
+      port: parseInt(env.SMTP_PORT, 10),
+      secure: env.SMTP_SECURE === 'true' || env.SMTP_PORT === '465', // true for 465, false for other ports
+      auth: {
+        user: env.SMTP_USER,
+        pass: env.SMTP_PASS,
+      },
+    });
+  }
+
+  // If Gmail is configured, use it
+  if (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: env.GMAIL_USER,
+        pass: env.GMAIL_APP_PASSWORD,
+      },
+    });
+  }
+
+  // Development: Create a test account (ethereal.email) or use console
+  if (env.NODE_ENV === 'development') {
+    // For development, we'll use a test transporter that logs to console
+    return nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      auth: {
+        user: 'test@ethereal.email',
+        pass: 'test',
+      },
+    });
+  }
+
+  // No email configured - return null
+  return null;
+};
+
+/**
+ * Send password reset email
+ */
+export const sendPasswordResetEmail = async (email, resetToken) => {
+  const transporter = createTransporter();
+  // Get frontend URL from env or default to localhost for development
+  const frontendUrl = env.FRONTEND_URL || (env.NODE_ENV === 'production' 
+    ? 'https://park-wise-two.vercel.app' 
+    : 'http://localhost:5173');
+  const resetLink = `${frontendUrl}/login?token=${resetToken}`;
+
+  const mailOptions = {
+    from: env.EMAIL_FROM || env.SMTP_USER || env.GMAIL_USER || 'noreply@parkwise.com',
+    to: email,
+    subject: 'Password Reset Request - Park Wise',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .container {
+              background-color: #f9f9f9;
+              border-radius: 8px;
+              padding: 30px;
+              border: 1px solid #e0e0e0;
+            }
+            .header {
+              background-color: #1e293b;
+              color: white;
+              padding: 20px;
+              border-radius: 8px 8px 0 0;
+              margin: -30px -30px 20px -30px;
+            }
+            .button {
+              display: inline-block;
+              padding: 12px 24px;
+              background-color: #1e293b;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+              margin: 20px 0;
+            }
+            .button:hover {
+              background-color: #334155;
+            }
+            .footer {
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #e0e0e0;
+              font-size: 12px;
+              color: #666;
+            }
+            .token {
+              background-color: #f0f0f0;
+              padding: 10px;
+              border-radius: 4px;
+              font-family: monospace;
+              word-break: break-all;
+              margin: 10px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔐 Password Reset Request</h1>
+            </div>
+            <p>Hello,</p>
+            <p>You have requested to reset your password for your Park Wise account.</p>
+            <p>Click the button below to reset your password:</p>
+            <p style="text-align: center;">
+              <a href="${resetLink}" class="button">Reset Password</a>
+            </p>
+            <p>Or copy and paste this link into your browser:</p>
+            <div class="token">${resetLink}</div>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you did not request this password reset, please ignore this email. Your password will remain unchanged.</p>
+            <div class="footer">
+              <p>This is an automated message from Park Wise. Please do not reply to this email.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: `
+      Password Reset Request - Park Wise
+      
+      You have requested to reset your password for your Park Wise account.
+      
+      Click this link to reset your password:
+      ${resetLink}
+      
+      This link will expire in 1 hour.
+      
+      If you did not request this password reset, please ignore this email.
+    `,
+  };
+
+  try {
+    // In development without email config, just log to console
+    if (env.NODE_ENV === 'development' && !transporter) {
+      console.log('📧 [DEV] Password reset email would be sent:');
+      console.log('   To:', email);
+      console.log('   Reset Link:', resetLink);
+      console.log('   Token:', resetToken);
+      console.log('\n💡 To enable email sending, configure SMTP or Gmail in .env file');
+      return { success: true, devMode: true };
+    }
+
+    if (!transporter) {
+      console.error('❌ Email transporter not configured. Please set up SMTP or Gmail credentials.');
+      throw new Error('Email service not configured');
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Password reset email sent successfully');
+    console.log('   To:', email);
+    console.log('   Message ID:', info.messageId);
+    
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ Failed to send password reset email:', error);
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
+};
+
