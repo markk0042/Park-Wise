@@ -72,7 +72,8 @@ export default function ResetPasswordPage() {
 
         // Redirect to login immediately (don't wait)
         console.log('🔐 Redirecting to login...');
-        navigate("/login", { replace: true });
+        // Use window.location for a hard redirect to ensure it works
+        window.location.href = '/login';
       }
     });
 
@@ -287,7 +288,8 @@ export default function ResetPasswordPage() {
         }
 
         setRecoveryTokens(null);
-        navigate("/login", { replace: true });
+        // Use window.location for a hard redirect to ensure it works
+        window.location.href = '/login';
       }
     } catch (err) {
       console.error("Password reset error:", err);
