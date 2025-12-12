@@ -98,11 +98,20 @@ export function AuthProvider({ children }) {
       
       // Also ignore SIGNED_IN events right after password reset (prevent auto-login)
       // Check if we just came from password reset by checking sessionStorage
-      if (event === 'SIGNED_IN' && sessionStorage.getItem('password_reset_complete')) {
-        console.log('🔐 Ignoring SIGNED_IN after password reset - forcing logout');
+      // Only ignore if we're still on the reset password page
+      const currentPath = window.location.pathname;
+      if (event === 'SIGNED_IN' && sessionStorage.getItem('password_reset_complete') && currentPath === '/auth/reset-password') {
+        console.log('🔐 Ignoring SIGNED_IN after password reset (still on reset page) - forcing logout');
         sessionStorage.removeItem('password_reset_complete');
         await supabase.auth.signOut();
         return;
+      }
+      
+      // If we're on login page and password reset was complete, clear the flag
+      // This allows legitimate login after password reset
+      if (currentPath === '/login' && sessionStorage.getItem('password_reset_complete')) {
+        console.log('🔐 On login page after password reset - clearing flag to allow login');
+        sessionStorage.removeItem('password_reset_complete');
       }
       
       if (session) {
@@ -110,9 +119,10 @@ export function AuthProvider({ children }) {
         setAuthToken(session.access_token);
         
         // Sync with backend when user logs in or token is refreshed
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        // Only sync on SIGNED_IN to prevent duplicate calls (TOKEN_REFRESHED will be handled by useEffect)
+        if (event === 'SIGNED_IN') {
           try {
-            console.log('🔄 Syncing user with backend...');
+            console.log('🔄 Syncing user with backend after login...');
             const user = await fetchCurrentUser();
             if (user) {
               setProfile(user);
@@ -134,12 +144,12 @@ export function AuthProvider({ children }) {
               setAuthToken(null);
               await supabase.auth.signOut();
             } else {
-              // Other errors - still try to set profile from Supabase
-              if (session.user) {
-                // We'll fetch profile in the next useEffect
-              }
+              // Other errors - profile will be loaded by useEffect
             }
           }
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Token refreshed - just update the token, profile will be reloaded by useEffect if needed
+          console.log('🔐 Token refreshed');
         }
       } else {
         setToken(null);
@@ -219,11 +229,18 @@ export function AuthProvider({ children }) {
   }, [token, profile]);
 
   // Load profile when token changes (sync with backend)
+  // Only load if profile is not already set (to prevent duplicate calls)
   useEffect(() => {
     const loadProfile = async () => {
       if (!token) {
         setProfile(null);
         setError(null);
+        setLoading(false);
+        return;
+      }
+
+      // If profile is already loaded and matches the token, skip
+      if (profile && profile.id) {
         setLoading(false);
         return;
       }
@@ -263,7 +280,7 @@ export function AuthProvider({ children }) {
       }
     };
     loadProfile();
-  }, [token]);
+  }, [token]); // Only depend on token, not profile
 
   const value = useMemo(
     () => ({
