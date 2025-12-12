@@ -13,49 +13,51 @@ import { KeyRound, Shield } from "lucide-react";
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [token, setToken] = useState(null);
+  const [recoveryTokens, setRecoveryTokens] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [status, setStatus] = useState({ type: null, message: "" });
   const navigate = useNavigate();
 
   useEffect(() => {
-    // IMPORTANT: Sign out immediately when arriving at reset password page
-    // This prevents auto-login from the reset link token
-    const initializeResetPage = async () => {
-      try {
-        // Get current session to check if we have a recovery token
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        // If we have a session, sign out first (we'll re-authenticate after password update)
-        if (session) {
-          console.log('🔐 Signing out existing session on reset password page');
-          await supabase.auth.signOut();
-        }
-      } catch (err) {
-        console.error('Error signing out:', err);
-      }
+    // Extract tokens from URL hash BEFORE doing anything else
+    // We need to capture these immediately as they might be cleared
+    const hash = window.location.hash;
+    console.log('🔐 URL hash:', hash);
+    
+    const params = new URLSearchParams(hash.replace("#", "?"));
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    const type = params.get("type");
 
-      // Extract access token from URL hash
-      const hash = window.location.hash;
-      const params = new URLSearchParams(hash.replace("#", "?"));
-      const accessToken = params.get("access_token");
-      const type = params.get("type");
+    console.log('🔐 Extracted tokens:', { type, hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken });
 
-      if (type === "recovery" && accessToken) {
-        setToken(accessToken);
-        setStatus({
-          type: "success",
-          message: "Please enter your new password below."
-        });
-      } else {
-        setStatus({
-          type: "error",
-          message: "Invalid or expired reset link. Please request a new password reset."
-        });
-      }
-    };
+    if (type === "recovery" && accessToken) {
+      // Store the tokens for later use
+      setRecoveryTokens({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        type: type
+      });
+      
+      setStatus({
+        type: "success",
+        message: "Please enter your new password below."
+      });
 
-    initializeResetPage();
+      // IMPORTANT: Clear the hash from URL to prevent auto-login
+      // But we've already extracted the tokens, so we're safe
+      window.history.replaceState(null, '', window.location.pathname);
+      
+      // Now sign out any existing session to prevent auto-login
+      supabase.auth.signOut().catch(err => {
+        console.warn('Error signing out:', err);
+      });
+    } else {
+      setStatus({
+        type: "error",
+        message: "Invalid or expired reset link. Please request a new password reset."
+      });
+    }
   }, []);
 
   async function handleReset(e) {
@@ -82,40 +84,42 @@ export default function ResetPasswordPage() {
     }
 
     try {
-      // IMPORTANT: We need to set the session first using the recovery token from URL
-      // Supabase requires an active session to update the password
-      const hash = window.location.hash;
-      const params = new URLSearchParams(hash.replace("#", "?"));
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-      const type = params.get("type");
-      
-      // Only proceed if we have a recovery token
-      if (type !== "recovery" || !accessToken) {
-        throw new Error("Invalid or expired reset link");
+      // Check if we have recovery tokens stored
+      if (!recoveryTokens || !recoveryTokens.access_token) {
+        throw new Error("Invalid or expired reset link. Please request a new password reset.");
       }
+
+      console.log('🔐 Setting session with recovery tokens...');
       
-      if (accessToken && refreshToken) {
-        // Set the session temporarily to update password
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        
-        if (sessionError) {
-          throw sessionError;
-        }
-      } else if (accessToken) {
-        // If we only have access token, try to use it
-        // Supabase might have already set the session, so try updating directly
+      // Set the session using the stored recovery tokens
+      // This is required for Supabase to allow password update
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: recoveryTokens.access_token,
+        refresh_token: recoveryTokens.refresh_token || recoveryTokens.access_token, // Fallback if no refresh token
+      });
+      
+      if (sessionError) {
+        console.error('❌ Session error:', sessionError);
+        throw new Error(sessionError.message || "Failed to authenticate reset link. Please request a new password reset.");
       }
+
+      if (!sessionData.session) {
+        throw new Error("Failed to create session. Please request a new password reset.");
+      }
+
+      console.log('✅ Session created, updating password...');
 
       // Update password using Supabase (requires active session)
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error: updateError } = await supabase.auth.updateUser({ 
+        password: password 
+      });
 
-      if (error) {
-        throw error;
+      if (updateError) {
+        console.error('❌ Password update error:', updateError);
+        throw updateError;
       }
+
+      console.log('✅ Password updated successfully');
 
       setStatus({
         type: "success",
@@ -173,7 +177,7 @@ export default function ResetPasswordPage() {
             <p className="text-sm text-slate-600 text-center">
               Enter your new password below. Make sure it's at least 6 characters long.
             </p>
-            {status.type === "success" && token && (
+            {status.type === "success" && recoveryTokens && (
               <Alert className="bg-blue-50 border-blue-200">
                 <AlertDescription className="text-xs text-blue-800">
                   <strong>Note:</strong> You may see a browser warning about Supabase redirecting you. This is normal and secure - Supabase verifies your reset link before bringing you here.
@@ -222,7 +226,7 @@ export default function ResetPasswordPage() {
             <Button
               type="submit"
               className="w-full h-11"
-              disabled={isUpdating || !token}
+              disabled={isUpdating || !recoveryTokens}
             >
               {isUpdating ? (
                 <>
