@@ -425,7 +425,13 @@ export const generate2FASecret = async (req, res, next) => {
       message: '2FA secret generated. Verify with a code to enable.',
     });
   } catch (err) {
-    next(createError(500, err.message || 'Failed to generate 2FA secret'));
+    console.error('❌ Error generating 2FA secret:', err);
+    // Provide more helpful error message if it's a database issue
+    const errorMessage = err.message || 'Failed to generate 2FA secret';
+    if (errorMessage.includes('column') && errorMessage.includes('does not exist')) {
+      return next(createError(500, '2FA database migration not run. Please run: server/migrations/add_2fa_columns.sql'));
+    }
+    next(createError(500, errorMessage));
   }
 };
 

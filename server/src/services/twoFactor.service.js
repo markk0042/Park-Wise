@@ -40,6 +40,11 @@ export const generateTwoFactorSecret = async (userId, userEmail) => {
     .eq('id', userId);
 
   if (error) {
+    console.error('❌ Error storing 2FA secret:', error);
+    // Check if it's a column missing error
+    if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+      throw new Error('2FA database columns not found. Please run the migration: server/migrations/add_2fa_columns.sql');
+    }
     throw new Error(`Failed to store 2FA secret: ${error.message}`);
   }
 
