@@ -295,5 +295,6 @@ def process_batch():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     print(f"Starting ANPR service on port {port}...")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    # For production (Render), use threaded mode
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
 
