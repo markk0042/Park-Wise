@@ -98,6 +98,17 @@ export const deleteVehicle = (id) => httpClient.delete(`/vehicles/${id}`);
 export const deleteAllVehicles = () => httpClient.delete('/vehicles');
 export const bulkInsertVehicles = (vehicles) => httpClient.post('/vehicles/bulk', { vehicles });
 export const bulkUpsertVehicles = (vehicles) => httpClient.post('/vehicles/bulk-upsert', { vehicles });
+
+// ANPR endpoints
+export const processANPRImage = async (imageBase64) => {
+  const result = await httpClient.post('/anpr/process', { image: imageBase64 });
+  return result;
+};
+
+export const checkANPRHealth = async () => {
+  const result = await httpClient.get('/anpr/health');
+  return result;
+};
 export const bulkReplaceVehicles = (vehicles) => httpClient.post('/vehicles/bulk-replace', { vehicles });
 export const updateAllParkingTypes = () => httpClient.post('/vehicles/update-parking-types');
 

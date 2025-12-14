@@ -30,6 +30,8 @@ import DeleteAllVehicles from "./DeleteAllVehicles";
 
 import TrendAnalysis from "./TrendAnalysis";
 
+import ANPR from "./ANPR";
+
 import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import { Clock, XCircle } from 'lucide-react';
@@ -64,6 +66,8 @@ const PAGES = {
     DeleteAllVehicles: DeleteAllVehicles,
     
     TrendAnalysis: TrendAnalysis,
+    
+    ANPR: ANPR,
     
 }
 
@@ -340,6 +344,15 @@ function PagesContent() {
                     element={
                         <ProtectedRoute requireAdmin={true}>
                             <VehicleDatabase />
+                        </ProtectedRoute>
+                    } 
+                />
+                
+                <Route 
+                    path="/ANPR" 
+                    element={
+                        <ProtectedRoute requireAdmin={true}>
+                            <ANPR />
                         </ProtectedRoute>
                     } 
                 />
