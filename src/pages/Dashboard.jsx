@@ -102,7 +102,7 @@ export default function Dashboard() {
 
   return (
     <div className="w-full overflow-x-hidden">
-      <div className="p-2 md:p-4 lg:p-6 bg-slate-50 min-h-screen">
+      <div className="px-1 md:px-2 lg:px-3 py-3 md:py-6 lg:py-8 bg-slate-50 min-h-screen">
         <div className="w-full space-y-4 md:space-y-6">
           <div className="text-center mb-6 md:mb-8">
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900">Parking Dashboard</h1>
@@ -119,7 +119,7 @@ export default function Dashboard() {
           <NonCompliantTracker logs={logs} />
 
           {isAdmin ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-3 items-stretch w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-4 items-stretch w-full px-0">
               <div className="w-full min-w-0 flex">
                 <QuickRegistrationLog />
               </div>
