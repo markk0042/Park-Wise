@@ -224,7 +224,7 @@ export default function QuickRegistrationLog() {
   };
 
   return (
-    <Card className="shadow-lg border-2 border-indigo-200">
+    <Card className="shadow-lg border-2 border-indigo-200 h-full flex flex-col">
       <CardHeader className="pb-3 bg-indigo-50">
         <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
           <Zap className="w-5 h-5 text-indigo-600" />
@@ -234,7 +234,7 @@ export default function QuickRegistrationLog() {
           Enter registration to auto-log with permit details
         </p>
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
+      <CardContent className="space-y-4 pt-4 flex-1">
         {successMessage && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-emerald-800 text-sm">
             <CheckCircle className="w-4 h-4 shrink-0" />
@@ -266,19 +266,9 @@ export default function QuickRegistrationLog() {
             </div>
           )}
           {!vehiclesLoading && vehicles.length > 0 && (
-            <>
-              <div className="text-xs text-slate-500 text-center py-1">
-                ✓ {vehicles.length} vehicles loaded - ready to search
-              </div>
-              <div className="text-xs text-blue-600 text-center py-1 bg-blue-50 border border-blue-200 rounded p-2">
-                DEBUG: Sample vehicles: {vehicles.slice(0, 3).map(v => v.registration_plate).join(', ')}
-                {vehicles.some(v => v.registration_plate?.toLowerCase().includes('191-mh-2848')) && (
-                  <div className="mt-1 text-green-600 font-bold">
-                    ✓ Vehicle "191-MH-2848" found in database!
-                  </div>
-                )}
-              </div>
-            </>
+            <div className="text-xs text-slate-500 text-center py-1">
+              ✓ {vehicles.length} vehicles loaded - ready to search
+            </div>
           )}
           
           <div className="flex gap-2">

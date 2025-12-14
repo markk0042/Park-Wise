@@ -43,7 +43,7 @@ export default function VehicleQuickSelect({ onSelectVehicle }) {
   };
 
   return (
-    <Card className="shadow-lg border-2 border-blue-200">
+    <Card className="shadow-lg border-2 border-blue-200 h-full flex flex-col">
       <CardHeader className="pb-3 bg-blue-50">
         <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
           <Zap className="w-5 h-5 text-blue-600" />
@@ -58,7 +58,7 @@ export default function VehicleQuickSelect({ onSelectVehicle }) {
           Search registered vehicles by plate or permit number
         </p>
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
+      <CardContent className="space-y-4 pt-4 flex-1">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input

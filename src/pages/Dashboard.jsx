@@ -119,50 +119,52 @@ export default function Dashboard() {
           <NonCompliantTracker logs={logs} />
 
           {isAdmin ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-4 w-full min-w-0">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-stretch">
+              <div className="w-full min-w-0 flex">
                 <QuickRegistrationLog />
               </div>
 
-              <div className="space-y-4 w-full min-w-0">
+              <div className="w-full min-w-0 flex">
                 <VehicleQuickSelect onSelectVehicle={handleSelectVehicle} />
-                
-                {selectedVehicle && (
-                  <Card className="shadow-lg border-2 border-blue-200">
-                    <CardHeader className="px-4 md:px-6">
-                      <CardTitle className="text-base md:text-lg font-bold">Vehicle Details</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 px-4 md:px-6">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs text-slate-600 mb-1">Registration</p>
-                          <p className="font-mono font-bold text-base md:text-lg truncate">{selectedVehicle.registration_plate}</p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs text-slate-600 mb-1">Permit Number</p>
-                          <p className="font-mono font-semibold text-base md:text-lg truncate">{selectedVehicle.permit_number || "-"}</p>
-                        </div>
-                        <div className="min-w-0 col-span-2">
-                          <p className="text-xs text-slate-600 mb-1">Parking Type</p>
-                          <Badge className={parkingColors[selectedVehicle.parking_type]}>
-                            {selectedVehicle.parking_type}
-                          </Badge>
-                        </div>
-                      </div>
-                      {selectedVehicle.notes && (
-                        <div className="min-w-0">
-                          <p className="text-xs text-slate-600 mb-1">Notes</p>
-                          <p className="text-sm break-words">{selectedVehicle.notes}</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
               </div>
             </div>
           ) : (
             <div className="max-w-2xl mx-auto w-full">
               <QuickRegistrationLog />
+            </div>
+          )}
+
+          {isAdmin && selectedVehicle && (
+            <div className="mt-4 md:mt-6 max-w-2xl mx-auto w-full">
+              <Card className="shadow-lg border-2 border-blue-200">
+                <CardHeader className="px-4 md:px-6">
+                  <CardTitle className="text-base md:text-lg font-bold">Vehicle Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 px-4 md:px-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-slate-600 mb-1">Registration</p>
+                      <p className="font-mono font-bold text-base md:text-lg truncate">{selectedVehicle.registration_plate}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-slate-600 mb-1">Permit Number</p>
+                      <p className="font-mono font-semibold text-base md:text-lg truncate">{selectedVehicle.permit_number || "-"}</p>
+                    </div>
+                    <div className="min-w-0 col-span-2">
+                      <p className="text-xs text-slate-600 mb-1">Parking Type</p>
+                      <Badge className={parkingColors[selectedVehicle.parking_type]}>
+                        {selectedVehicle.parking_type}
+                      </Badge>
+                    </div>
+                  </div>
+                  {selectedVehicle.notes && (
+                    <div className="min-w-0">
+                      <p className="text-xs text-slate-600 mb-1">Notes</p>
+                      <p className="text-sm break-words">{selectedVehicle.notes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
 
