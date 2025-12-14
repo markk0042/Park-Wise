@@ -121,8 +121,8 @@ export default function Dashboard() {
 
         {/* Full-width section for the two boxes - fills screen from left to right */}
         {isAdmin && (
-          <div className="w-full px-0 -mx-0">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 items-stretch w-full">
+          <div className="w-full px-2 md:px-3 lg:px-4 my-2 md:my-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-3 items-stretch w-full">
               <div className="w-full flex">
                 <QuickRegistrationLog />
               </div>
