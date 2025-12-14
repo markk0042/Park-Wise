@@ -224,7 +224,7 @@ export default function QuickRegistrationLog() {
   };
 
   return (
-    <Card className="shadow-lg border-2 border-indigo-200 h-full flex flex-col">
+    <Card className="shadow-lg border-2 border-indigo-200 h-full w-full flex flex-col">
       <CardHeader className="pb-3 bg-indigo-50">
         <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
           <Zap className="w-5 h-5 text-indigo-600" />

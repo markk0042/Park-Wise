@@ -102,8 +102,8 @@ export default function Dashboard() {
 
   return (
     <div className="w-full overflow-x-hidden">
-      <div className="px-1 md:px-2 lg:px-3 py-3 md:py-6 lg:py-8 bg-slate-50 min-h-screen">
-        <div className="w-full space-y-4 md:space-y-6">
+      <div className="py-3 md:py-6 lg:py-8 bg-slate-50 min-h-screen">
+        <div className="w-full space-y-4 md:space-y-6 px-2 md:px-4 lg:px-6">
           <div className="text-center mb-6 md:mb-8">
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900">Parking Dashboard</h1>
             <p className="text-sm md:text-base text-slate-600 mt-1">
@@ -117,18 +117,25 @@ export default function Dashboard() {
           />
 
           <NonCompliantTracker logs={logs} />
+        </div>
 
-          {isAdmin ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-4 items-stretch w-full px-0">
-              <div className="w-full min-w-0 flex">
+        {/* Full-width section for the two boxes - fills screen from left to right */}
+        {isAdmin && (
+          <div className="w-full px-0 -mx-0">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 items-stretch w-full">
+              <div className="w-full flex">
                 <QuickRegistrationLog />
               </div>
 
-              <div className="w-full min-w-0 flex">
+              <div className="w-full flex">
                 <VehicleQuickSelect onSelectVehicle={handleSelectVehicle} />
               </div>
             </div>
-          ) : (
+          </div>
+        )}
+
+        <div className="w-full space-y-4 md:space-y-6 px-2 md:px-4 lg:px-6">
+          {!isAdmin && (
             <div className="max-w-2xl mx-auto w-full">
               <QuickRegistrationLog />
             </div>

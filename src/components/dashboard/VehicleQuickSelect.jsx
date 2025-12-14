@@ -43,7 +43,7 @@ export default function VehicleQuickSelect({ onSelectVehicle }) {
   };
 
   return (
-    <Card className="shadow-lg border-2 border-blue-200 h-full flex flex-col">
+    <Card className="shadow-lg border-2 border-blue-200 h-full w-full flex flex-col">
       <CardHeader className="pb-3 bg-blue-50">
         <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
           <Zap className="w-5 h-5 text-blue-600" />
