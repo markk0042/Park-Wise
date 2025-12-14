@@ -1,0 +1,50 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Model files (download at runtime)
+*.pt
+*.pth
+*.onnx
+*.pkl
+*.h5
+*.pb
+
+# EasyOCR models (download at runtime)
+~/.EasyOCR/
+/tmp/easyocr/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+README.md
+
+# Test files
+test/
+tests/
+*.test.py
+
