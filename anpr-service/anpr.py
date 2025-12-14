@@ -27,6 +27,13 @@ try:
     model_path = os.getenv('YOLO_MODEL_PATH', 'yolov8n.pt')
     if os.path.exists('license_plate_yolo.pt'):
         model_path = 'license_plate_yolo.pt'
+    
+    # Fix for PyTorch 2.6+ security change - allow loading YOLO models
+    import torch
+    if hasattr(torch.serialization, 'add_safe_globals'):
+        from ultralytics.nn.tasks import DetectionModel
+        torch.serialization.add_safe_globals([DetectionModel])
+    
     model = YOLO(model_path)
     print(f"YOLO model loaded: {model_path}")
 except Exception as e:
@@ -35,9 +42,21 @@ except Exception as e:
     model = None
 
 # Initialize EasyOCR reader (English)
+# Use quantized model to reduce memory usage
 print("Initializing EasyOCR...")
-reader = easyocr.Reader(['en'], gpu=False)
-print("EasyOCR ready!")
+try:
+    # Try to use quantized model for lower memory usage
+    reader = easyocr.Reader(['en'], gpu=False, quantize=True, model_storage_directory='/tmp/easyocr')
+    print("EasyOCR ready!")
+except Exception as e:
+    print(f"Warning: EasyOCR initialization failed: {e}")
+    print("Trying without quantization...")
+    try:
+        reader = easyocr.Reader(['en'], gpu=False)
+        print("EasyOCR ready!")
+    except Exception as e2:
+        print(f"Error: Could not initialize EasyOCR: {e2}")
+        reader = None
 
 def preprocess_image(image):
     """Preprocess image for better OCR results"""
@@ -136,6 +155,8 @@ def extract_text_from_roi(image, bbox):
     processed_roi = preprocess_image(roi)
     
     # Use EasyOCR to read text
+    if reader is None:
+        return None, 0.0
     results = reader.readtext(processed_roi)
     
     if not results:
