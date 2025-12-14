@@ -9,6 +9,7 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv/
 
 # Model files (download at runtime)
 *.pt
@@ -17,16 +18,19 @@ ENV/
 *.pkl
 *.h5
 *.pb
+*.weights
 
 # EasyOCR models (download at runtime)
 ~/.EasyOCR/
 /tmp/easyocr/
+.easyocr/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-*
 
 # OS
 .DS_Store
@@ -34,17 +38,43 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # Git
 .git/
 .gitignore
+.gitattributes
 
 # Documentation
 *.md
 README.md
+docs/
 
 # Test files
 test/
 tests/
 *.test.py
+*_test.py
 
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Environment files
+.env
+.env.local
+
+# Docker
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
