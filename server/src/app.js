@@ -92,6 +92,11 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api', router);
 
+// Ignore favicon requests (browsers automatically request this)
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // 204 No Content - browser will stop requesting
+});
+
 app.use((req, res, next) => {
   next(createError(404, `Route ${req.originalUrl} not found`));
 });
