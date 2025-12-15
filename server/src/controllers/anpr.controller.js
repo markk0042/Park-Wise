@@ -15,14 +15,6 @@ export const processANPR = async (req, res, next) => {
       });
     }
 
-    // Validate image format
-    if (!image.startsWith('data:image/') && !image.match(/^[A-Za-z0-9+/=]+$/)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid image format. Expected base64 encoded image.'
-      });
-    }
-
     const result = await processANPRWithLookup(image);
 
     res.json({
