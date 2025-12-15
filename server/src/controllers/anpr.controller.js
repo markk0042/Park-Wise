@@ -48,4 +48,3 @@ export const getANPRHealth = async (req, res, next) => {
     });
   }
 };
-
