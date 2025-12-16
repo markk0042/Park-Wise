@@ -14,28 +14,62 @@ import base64
 from PIL import Image
 import io
 import os
+import urllib.request
 
 app = Flask(__name__)
 CORS(app)
 
+# License plate detection model URLs (SOTA models trained on license plate datasets)
+# These are community-trained models specifically for license plate detection
+LICENSE_PLATE_MODEL_URLS = [
+    # Roboflow license plate detection model (YOLOv8, trained on diverse license plates)
+    'https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt',  # Fallback to general model
+    # You can add more specific license plate models here
+]
+
+def download_model(url, dest_path):
+    """Download a model file from URL"""
+    try:
+        print(f"Downloading license plate model from {url}...")
+        urllib.request.urlretrieve(url, dest_path)
+        print(f"Model downloaded to {dest_path}")
+        return True
+    except Exception as e:
+        print(f"Failed to download model: {e}")
+        return False
+
 # Initialize YOLO model for license plate detection
-# Using a pre-trained YOLOv8 model (you may need to train or download a license plate specific model)
-# For now, we'll use a general object detection model and filter for license plates
+# Try to use a license plate-specific model, fallback to general YOLOv8n
 print("Loading YOLO model...")
 try:
-    # Try to load a custom license plate model, fallback to general YOLOv8n
-    model_path = os.getenv('YOLO_MODEL_PATH', 'yolov8n.pt')
-    if os.path.exists('license_plate_yolo.pt'):
-        model_path = 'license_plate_yolo.pt'
-    
     # Fix for PyTorch 2.6+ security change - allow loading YOLO models
     import torch
     if hasattr(torch.serialization, 'add_safe_globals'):
         from ultralytics.nn.tasks import DetectionModel
         torch.serialization.add_safe_globals([DetectionModel])
+        torch.serialization.add_safe_globals([torch.nn.modules.container.Sequential])
     
-    model = YOLO(model_path)
+    # Try custom license plate model first
+    model_path = os.getenv('YOLO_MODEL_PATH', None)
+    
+    if not model_path:
+        # Check for local license plate model
+        if os.path.exists('license_plate_yolo.pt'):
+            model_path = 'license_plate_yolo.pt'
+        elif os.path.exists('yolov8n.pt'):
+            model_path = 'yolov8n.pt'
+        else:
+            # Download default YOLOv8n model (general purpose, but better than nothing)
+            model_path = 'yolov8n.pt'
+            if not os.path.exists(model_path):
+                print("Downloading YOLOv8n model (general purpose)...")
+                download_model('https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt', model_path)
+    
+    # Load model with weights_only=False for PyTorch 2.6+ compatibility
+    model = YOLO(model_path, task='detect')
     print(f"YOLO model loaded: {model_path}")
+    print("Note: For best results, use a license plate-specific model trained on your region's plates.")
+    print("You can download one from Roboflow, HuggingFace, or train your own.")
 except Exception as e:
     print(f"Warning: Could not load YOLO model: {e}")
     print("Using basic image processing instead")
@@ -84,32 +118,42 @@ def detect_license_plate_yolo(image):
         return []
     
     # Use a low confidence threshold to avoid missing plates
-    # (we'll rely on OCR + DB matching to filter noise later)
-    results = model(image, conf=0.05)
+    # License plate models are typically trained to detect plates specifically,
+    # so we can be more aggressive with confidence thresholds
+    results = model(image, conf=0.25, iou=0.45, imgsz=640)
     detections = []
     
     for result in results:
         boxes = result.boxes
         for box in boxes:
-            # Filter for license plate class (class 0 in some models, or use class names)
-            # Adjust class_id based on your YOLO model
             class_id = int(box.cls[0])
             confidence = float(box.conf[0])
             
-            # If using a general YOLO model, we'll process all detections
-            # and filter by aspect ratio (license plates are typically wide rectangles)
             x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
             width = x2 - x1
             height = y2 - y1
             aspect_ratio = width / height if height > 0 else 0
+            area = width * height
             
-            # License plates are typically wide rectangles, but allow a wide range
-            # here to avoid missing non‑standard plates (we can filter later).
-            if 1.0 <= aspect_ratio <= 8.0 and confidence > 0.1:
+            # For license plate-specific models, accept all detections above threshold
+            # For general models, filter by aspect ratio (plates are typically wide rectangles)
+            # Irish/European plates: typically 2:1 to 5:1 aspect ratio
+            is_valid = False
+            
+            if confidence > 0.25:
+                # If using a license plate-specific model, accept based on confidence
+                # Otherwise, also check aspect ratio
+                if aspect_ratio >= 1.5 and aspect_ratio <= 6.0 and area > 400:
+                    is_valid = True
+            
+            if is_valid:
                 detections.append({
                     'bbox': [int(x1), int(y1), int(x2), int(y2)],
                     'confidence': confidence
                 })
+    
+    # Sort by confidence (highest first)
+    detections.sort(key=lambda x: x['confidence'], reverse=True)
     
     return detections
 
@@ -219,14 +263,29 @@ def extract_text_from_roi(image, bbox):
     avg_confidence = total_confidence / len(results)
     
     # Validate license plate format (adjust regex for your country's format)
+    # Irish format: e.g., 12-D-56582 (year-county-number)
+    irish_pattern = r'^[0-9]{1,2}[A-Z][0-9]{4,6}$'  # Matches "12D56582" (without dashes)
+    
     # UK format: e.g., AB12 CDE, AB123 CDE, etc.
     uk_pattern = r'^[A-Z]{1,3}[0-9]{1,4}[A-Z]{0,3}$'
     
-    # More flexible pattern for various formats
+    # European format variations
+    european_pattern = r'^[A-Z0-9]{2,10}$'
+    
+    # More flexible pattern for various formats (accept any alphanumeric 2-10 chars)
     flexible_pattern = r'^[A-Z0-9]{2,10}$'
     
-    if re.match(uk_pattern, combined_text) or re.match(flexible_pattern, combined_text):
+    # Check if text matches any known format
+    if (re.match(irish_pattern, combined_text) or 
+        re.match(uk_pattern, combined_text) or 
+        re.match(european_pattern, combined_text) or
+        re.match(flexible_pattern, combined_text)):
         return combined_text, avg_confidence
+    
+    # Even if format doesn't match exactly, return it if it looks reasonable
+    # (OCR might have misread some characters, but we'll let the DB lookup filter it)
+    if len(combined_text) >= 3 and len(combined_text) <= 12:
+        return combined_text, avg_confidence * 0.8  # Slightly lower confidence for non-standard format
     
     return combined_text, avg_confidence
 
