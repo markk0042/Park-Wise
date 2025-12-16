@@ -13,6 +13,7 @@ export default function ANPR() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState(null);
@@ -280,24 +281,29 @@ export default function ANPR() {
                 </>
               )}
 
-              <label className="flex-1">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  disabled={isProcessing}
-                />
-                <Button
-                  as="span"
-                  variant="outline"
-                  className="w-full"
-                  disabled={isProcessing}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Image
-                </Button>
-              </label>
+              {/* Upload image via hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+                disabled={isProcessing}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                disabled={isProcessing}
+                onClick={() => {
+                  if (fileInputRef.current && !isProcessing) {
+                    fileInputRef.current.click();
+                  }
+                }}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Image
+              </Button>
             </div>
           </CardContent>
         </Card>
