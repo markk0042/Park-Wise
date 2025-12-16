@@ -154,13 +154,27 @@ def extract_text_from_roi(image, bbox):
     if roi.size == 0:
         return None, 0.0
     
-    # Preprocess ROI
-    processed_roi = preprocess_image(roi)
-    
-    # Use EasyOCR to read text
+    # EasyOCR generally works best on RGB images; start with a color ROI,
+    # and only rely on heavy preprocessing implicitly inside EasyOCR.
     if reader is None:
         return None, 0.0
-    results = reader.readtext(processed_roi)
+
+    # Convert BGR (OpenCV) to RGB for EasyOCR
+    roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+
+    # If the plate region is small, upscale it to help OCR
+    h, w = roi_rgb.shape[:2]
+    if h < 40 or w < 100:
+        roi_rgb = cv2.resize(
+            roi_rgb,
+            None,
+            fx=2.0,
+            fy=2.0,
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+    # Use EasyOCR to read text
+    results = reader.readtext(roi_rgb)
     
     if not results:
         return None, 0.0
