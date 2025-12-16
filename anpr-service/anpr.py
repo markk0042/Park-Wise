@@ -42,20 +42,30 @@ def download_model(url, dest_path):
 # Try to use a license plate-specific model, fallback to general YOLOv8n
 print("Loading YOLO model...")
 try:
-    # Fix for PyTorch 2.6+ security change - allow loading YOLO models
+    # Fix for PyTorch 2.6+ security change - patch torch.load to use weights_only=False
+    # This bypasses the need to add every class to safe_globals
     import torch
-    if hasattr(torch.serialization, 'add_safe_globals'):
-        from ultralytics.nn.tasks import DetectionModel
-        torch.serialization.add_safe_globals([DetectionModel])
-        torch.serialization.add_safe_globals([torch.nn.modules.container.Sequential])
+    original_load = torch.load
+    
+    def patched_load(*args, **kwargs):
+        # Force weights_only=False for YOLO model loading
+        kwargs['weights_only'] = False
+        return original_load(*args, **kwargs)
+    
+    # Monkey-patch torch.load before YOLO imports
+    torch.load = patched_load
     
     # Try custom license plate model first
     model_path = os.getenv('YOLO_MODEL_PATH', None)
     
     if not model_path:
-        # Check for local license plate model
-        if os.path.exists('license_plate_yolo.pt'):
+        # Check for local license plate models (in order of preference)
+        if os.path.exists('lp_yolo.pt'):
+            model_path = 'lp_yolo.pt'
+        elif os.path.exists('license_plate_yolo.pt'):
             model_path = 'license_plate_yolo.pt'
+        elif os.path.exists('license_plate_detector.pt'):
+            model_path = 'license_plate_detector.pt'
         elif os.path.exists('yolov8n.pt'):
             model_path = 'yolov8n.pt'
         else:
@@ -65,11 +75,14 @@ try:
                 print("Downloading YOLOv8n model (general purpose)...")
                 download_model('https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt', model_path)
     
-    # Load model with weights_only=False for PyTorch 2.6+ compatibility
+    # Load model - torch.load is now patched to use weights_only=False
     model = YOLO(model_path, task='detect')
     print(f"YOLO model loaded: {model_path}")
-    print("Note: For best results, use a license plate-specific model trained on your region's plates.")
-    print("You can download one from Roboflow, HuggingFace, or train your own.")
+    if 'lp_yolo' in model_path or 'license_plate' in model_path:
+        print("✓ Using license plate-specific model - optimized for plate detection!")
+    else:
+        print("Note: For best results, use a license plate-specific model trained on your region's plates.")
+        print("You can download one from Roboflow, HuggingFace, or train your own.")
 except Exception as e:
     print(f"Warning: Could not load YOLO model: {e}")
     print("Using basic image processing instead")
