@@ -189,6 +189,13 @@ def extract_text_from_roi(image, bbox):
         )
         thresh_rgb = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
         results = reader.readtext(thresh_rgb)
+
+    # Debug: log raw OCR results for this ROI
+    try:
+        raw_texts = [r[1] for r in results]
+        print(f"[ANPR OCR] ROI {bbox} -> {raw_texts}")
+    except Exception:
+        pass
     
     if not results:
         return None, 0.0
@@ -263,7 +270,8 @@ def process_image(image_array):
                 'confidence': float(confidence),
                 'bbox': [0, 0, image.shape[1], image.shape[0]]
             })
-    
+
+    print(f"[ANPR] Final detections: {results}")
     return results
 
 @app.route('/health', methods=['GET'])
