@@ -71,8 +71,11 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200,
 }));
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
+
+// Increase JSON body size limit so high‑resolution uploaded images (base64)
+// don't get rejected before reaching the ANPR service.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
 app.get('/', (req, res) => {
