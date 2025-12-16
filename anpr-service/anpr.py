@@ -83,9 +83,9 @@ def detect_license_plate_yolo(image):
     if model is None:
         return []
     
-    # Use a slightly lower confidence threshold to avoid missing plates
+    # Use a low confidence threshold to avoid missing plates
     # (we'll rely on OCR + DB matching to filter noise later)
-    results = model(image, conf=0.15)
+    results = model(image, conf=0.05)
     detections = []
     
     for result in results:
@@ -103,9 +103,9 @@ def detect_license_plate_yolo(image):
             height = y2 - y1
             aspect_ratio = width / height if height > 0 else 0
             
-            # License plates are typically wide rectangles, but allow a wider range
+            # License plates are typically wide rectangles, but allow a wide range
             # here to avoid missing non‑standard plates (we can filter later).
-            if 1.2 <= aspect_ratio <= 7.0 and confidence > 0.2:
+            if 1.0 <= aspect_ratio <= 8.0 and confidence > 0.1:
                 detections.append({
                     'bbox': [int(x1), int(y1), int(x2), int(y2)],
                     'confidence': confidence
@@ -173,8 +173,22 @@ def extract_text_from_roi(image, bbox):
             interpolation=cv2.INTER_CUBIC,
         )
 
-    # Use EasyOCR to read text
+    # First attempt: EasyOCR on color ROI
     results = reader.readtext(roi_rgb)
+    # If nothing is found, try a high‑contrast, thresholded version as a fallback.
+    if not results:
+        gray = cv2.cvtColor(roi_rgb, cv2.COLOR_RGB2GRAY)
+        # Adaptive threshold to emphasize dark characters on light background
+        thresh = cv2.adaptiveThreshold(
+            gray,
+            255,
+            cv2.ADAPTIVE_THRESH_MEAN_C,
+            cv2.THRESH_BINARY_INV,
+            15,
+            10,
+        )
+        thresh_rgb = cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
+        results = reader.readtext(thresh_rgb)
     
     if not results:
         return None, 0.0
