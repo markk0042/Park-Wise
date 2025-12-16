@@ -83,7 +83,9 @@ def detect_license_plate_yolo(image):
     if model is None:
         return []
     
-    results = model(image, conf=0.25)
+    # Use a slightly lower confidence threshold to avoid missing plates
+    # (we'll rely on OCR + DB matching to filter noise later)
+    results = model(image, conf=0.15)
     detections = []
     
     for result in results:
@@ -101,8 +103,9 @@ def detect_license_plate_yolo(image):
             height = y2 - y1
             aspect_ratio = width / height if height > 0 else 0
             
-            # License plates typically have aspect ratio between 2:1 and 5:1
-            if 1.5 <= aspect_ratio <= 6.0 and confidence > 0.3:
+            # License plates are typically wide rectangles, but allow a wider range
+            # here to avoid missing non‑standard plates (we can filter later).
+            if 1.2 <= aspect_ratio <= 7.0 and confidence > 0.2:
                 detections.append({
                     'bbox': [int(x1), int(y1), int(x2), int(y2)],
                     'confidence': confidence
@@ -126,8 +129,8 @@ def detect_license_plate_contours(image):
         aspect_ratio = w / h if h > 0 else 0
         area = cv2.contourArea(contour)
         
-        # Filter by aspect ratio and area
-        if 2.0 <= aspect_ratio <= 5.0 and area > 1000:
+        # Be a bit more permissive on aspect ratio and area so we don't miss plates
+        if 1.5 <= aspect_ratio <= 7.0 and area > 500:
             detections.append({
                 'bbox': [x, y, x + w, y + h],
                 'confidence': 0.5
