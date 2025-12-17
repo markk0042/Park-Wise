@@ -5,7 +5,6 @@ import parkingLogRoutes from './parkingLogs.routes.js';
 import complaintRoutes from './complaints.routes.js';
 import uploadRoutes from './uploads.routes.js';
 import reportRoutes from './reports.routes.js';
-import anprRoutes from './anpr.routes.js';
 
 const router = Router();
 
@@ -15,6 +14,5 @@ router.use('/parking-logs', parkingLogRoutes);
 router.use('/complaints', complaintRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/reports', reportRoutes);
-router.use('/anpr', anprRoutes);
 
 export default router;
