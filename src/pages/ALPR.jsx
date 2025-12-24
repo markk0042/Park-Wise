@@ -22,7 +22,7 @@ export default function ALPR() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [autoCapture, setAutoCapture] = useState(false);
   const autoCaptureIntervalRef = useRef(null);
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
   const { profile: user } = useAuth();
 
   // Check service health on mount
@@ -172,7 +172,11 @@ export default function ALPR() {
 
       // Auto-dismiss after 3 seconds
       setTimeout(() => {
-        successToast.dismiss();
+        if (successToast?.id) {
+          dismiss(successToast.id);
+        } else if (successToast?.dismiss) {
+          successToast.dismiss();
+        }
       }, 3000);
 
       // Clear image and results to allow scanning next vehicle
@@ -190,7 +194,11 @@ export default function ALPR() {
 
       // Auto-dismiss after 3 seconds
       setTimeout(() => {
-        errorToast.dismiss();
+        if (errorToast?.id) {
+          dismiss(errorToast.id);
+        } else if (errorToast?.dismiss) {
+          errorToast.dismiss();
+        }
       }, 3000);
     } finally {
       setLogging(prev => ({ ...prev, [index]: false }));
