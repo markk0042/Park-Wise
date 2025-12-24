@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { processALPRImage, checkALPRHealth } from '@/api';
+import { processALPRImage, checkALPRHealth, createParkingLog } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Camera, Upload, Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Camera, Upload, Loader2, CheckCircle2, XCircle, AlertCircle, FileText } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ALPR() {
   const [image, setImage] = useState(null);
@@ -12,12 +14,15 @@ export default function ALPR() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [serviceStatus, setServiceStatus] = useState(null);
+  const [logging, setLogging] = useState({}); // Track logging state per plate
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [autoCapture, setAutoCapture] = useState(false);
   const autoCaptureIntervalRef = useRef(null);
+  const { toast } = useToast();
+  const { profile: user } = useAuth();
 
   // Check service health on mount
   React.useEffect(() => {
@@ -139,6 +144,37 @@ export default function ALPR() {
       console.error('ALPR processing error:', err);
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const logVehicle = async (plate, index) => {
+    setLogging(prev => ({ ...prev, [index]: true }));
+
+    try {
+      // Use parking_type from vehicle_info if available, otherwise default to Green
+      const parkingType = plate.vehicle_info?.parking_type || 'Green';
+      
+      const logData = {
+        registration_plate: plate.text,
+        parking_type: parkingType,
+        notes: `Logged via ALPR - Confidence: ${(plate.confidence * 100).toFixed(1)}%`,
+      };
+
+      await createParkingLog(logData);
+
+      toast({
+        title: 'Vehicle Logged Successfully',
+        description: `Plate ${plate.text} has been logged as ${parkingType} parking.`,
+      });
+    } catch (err) {
+      console.error('Error logging vehicle:', err);
+      toast({
+        title: 'Error Logging Vehicle',
+        description: err.message || 'Failed to log vehicle. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLogging(prev => ({ ...prev, [index]: false }));
     }
   };
 
@@ -341,6 +377,29 @@ export default function ALPR() {
                               </div>
                             </div>
                           )}
+
+                          {/* Log Vehicle Button */}
+                          <div className="mt-4">
+                            <Button
+                              onClick={() => logVehicle(plate, index)}
+                              disabled={logging[index]}
+                              variant="default"
+                              className="w-full"
+                              size="sm"
+                            >
+                              {logging[index] ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Logging...
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Log Vehicle
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </CardContent>
