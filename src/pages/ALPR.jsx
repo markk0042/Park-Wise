@@ -89,17 +89,63 @@ export default function ALPR() {
   };
 
   const captureFromCamera = () => {
-    if (videoRef.current) {
+    if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(videoRef.current, 0, 0);
       const base64 = canvas.toDataURL('image/jpeg');
-      setImage(base64);
-      setImagePreview(base64);
-      setResults(null);
-      setError(null);
+      return base64;
+    }
+    return null;
+  };
+
+  const captureAndProcess = async () => {
+    // Don't capture if already processing
+    if (processing) {
+      return;
+    }
+
+    // Capture image from camera
+    const capturedImage = captureFromCamera();
+    if (!capturedImage) {
+      return; // Camera not ready
+    }
+
+    // Set image state
+    setImage(capturedImage);
+    setImagePreview(capturedImage);
+    setResults(null);
+    setError(null);
+
+    // Process the captured image
+    await processImageWithBase64(capturedImage);
+  };
+
+  const processImageWithBase64 = async (imageBase64) => {
+    if (!imageBase64) {
+      setError('No image to process');
+      return;
+    }
+
+    setProcessing(true);
+    setError(null);
+    setResults(null);
+
+    try {
+      const result = await processALPRImage(imageBase64);
+      
+      if (result.success && result.plates && result.plates.length > 0) {
+        setResults(result);
+      } else {
+        setError('No license plates detected in the image');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to process image');
+      console.error('ALPR processing error:', err);
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -114,13 +160,21 @@ export default function ALPR() {
     } else {
       // Start auto capture
       if (!isCameraActive) {
-        startCamera();
+        startCamera().then(() => {
+          // Wait a bit for camera to initialize before starting auto-capture
+          setTimeout(() => {
+            setAutoCapture(true);
+            autoCaptureIntervalRef.current = setInterval(() => {
+              captureAndProcess();
+            }, 3000); // Capture every 3 seconds
+          }, 1000);
+        });
+      } else {
+        setAutoCapture(true);
+        autoCaptureIntervalRef.current = setInterval(() => {
+          captureAndProcess();
+        }, 3000); // Capture every 3 seconds
       }
-      setAutoCapture(true);
-      autoCaptureIntervalRef.current = setInterval(() => {
-        captureFromCamera();
-        processImage();
-      }, 3000); // Capture every 3 seconds
     }
   };
 
@@ -130,24 +184,7 @@ export default function ALPR() {
       return;
     }
 
-    setProcessing(true);
-    setError(null);
-    setResults(null);
-
-    try {
-      const result = await processALPRImage(image);
-      
-      if (result.success && result.plates && result.plates.length > 0) {
-        setResults(result);
-      } else {
-        setError('No license plates detected in the image');
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to process image');
-      console.error('ALPR processing error:', err);
-    } finally {
-      setProcessing(false);
-    }
+    await processImageWithBase64(image);
   };
 
   const logVehicle = async (plate, index) => {
@@ -193,15 +230,15 @@ export default function ALPR() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col items-center justify-center relative">
+        <div className="text-center">
           <h1 className="text-3xl font-bold">ALPR System</h1>
           <p className="text-muted-foreground mt-1">
             Automatic License Plate Recognition
           </p>
         </div>
         {serviceStatus !== null && (
-          <div className="flex items-center gap-2">
+          <div className="absolute top-0 right-0 flex items-center gap-2">
             {serviceStatus ? (
               <>
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
@@ -275,7 +312,21 @@ export default function ALPR() {
               
               {isCameraActive && (
                 <>
-                  <Button onClick={captureFromCamera} variant="default" className="flex-1">
+                  <Button 
+                    onClick={async () => {
+                      const captured = captureFromCamera();
+                      if (captured) {
+                        setImage(captured);
+                        setImagePreview(captured);
+                        setResults(null);
+                        setError(null);
+                        await processImageWithBase64(captured);
+                      }
+                    }} 
+                    variant="default" 
+                    className="flex-1"
+                    disabled={processing}
+                  >
                     <Camera className="mr-2 h-4 w-4" />
                     Capture & Process
                   </Button>
@@ -283,6 +334,7 @@ export default function ALPR() {
                     onClick={toggleAutoCapture}
                     variant={autoCapture ? "destructive" : "secondary"}
                     className="flex-1"
+                    disabled={processing}
                   >
                     {autoCapture ? "Stop Auto Capture" : "Auto Capture"}
                   </Button>
