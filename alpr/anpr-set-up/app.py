@@ -1,3 +1,11 @@
+# FIX: Patch PIL.Image.ANTIALIAS before any imports that might use it
+try:
+    from PIL import Image
+    # Fix for Pillow 10.0.0+ compatibility
+    if not hasattr(Image, 'ANTIALIAS'):
+        Image.ANTIALIAS = Image.LANCZOS
+except ImportError:
+    pass
 """
 Flask web application for ALPR (Automatic License Plate Recognition).
 """
