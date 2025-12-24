@@ -14,6 +14,7 @@ export default function ALPR() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [serviceStatus, setServiceStatus] = useState(null);
+  const [serviceChecked, setServiceChecked] = useState(false); // Track if service check is complete
   const [logging, setLogging] = useState({}); // Track logging state per plate
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
@@ -35,6 +36,8 @@ export default function ALPR() {
       setServiceStatus(result.service_available);
     } catch (err) {
       setServiceStatus(false);
+    } finally {
+      setServiceChecked(true); // Mark that we've checked the service
     }
   };
 
@@ -171,6 +174,12 @@ export default function ALPR() {
       setTimeout(() => {
         successToast.dismiss();
       }, 3000);
+
+      // Clear image and results to allow scanning next vehicle
+      setImage(null);
+      setImagePreview(null);
+      setResults(null);
+      setError(null);
     } catch (err) {
       console.error('Error logging vehicle:', err);
       const errorToast = toast({
@@ -214,7 +223,7 @@ export default function ALPR() {
         )}
       </div>
 
-      {!serviceStatus && (
+      {serviceChecked && !serviceStatus && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
