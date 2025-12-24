@@ -6,9 +6,11 @@ try:
         Image.ANTIALIAS = Image.LANCZOS
 except ImportError:
     pass
+
 """
 Flask web application for ALPR (Automatic License Plate Recognition).
 """
+
 import base64
 import json
 import logging
@@ -255,6 +257,98 @@ def health():
         "alpr_initialized": alpr is not None,
         "alpr_error": alpr_init_error if alpr is None else None
     })
+
+
+@app.route('/health', methods=['GET'])
+def health_mobile():
+    """Health check endpoint for mobile app."""
+    # Try to initialize if not already done
+    if alpr is None:
+        initialize_alpr()
+    
+    return jsonify({
+        "status": "healthy" if alpr is not None else "initializing",
+        "alpr_initialized": alpr is not None,
+        "alpr_error": alpr_init_error if alpr is None else None
+    })
+
+
+@app.route('/process', methods=['POST'])
+def process():
+    """Process base64 image with ALPR (for mobile app)."""
+    # Try to initialize if not already done
+    if alpr is None:
+        initialize_alpr()
+    
+    if alpr is None:
+        error_msg = alpr_init_error or "ALPR system not initialized. Models may still be downloading."
+        return jsonify({"success": False, "error": error_msg}), 500
+    
+    try:
+        data = request.get_json()
+        if not data or 'image' not in data:
+            return jsonify({"success": False, "error": "No image data provided"}), 400
+        
+        # Decode base64 image
+        image_base64 = data['image']
+        image_data = base64.b64decode(image_base64)
+        
+        # Convert to numpy array
+        nparr = np.frombuffer(image_data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            return jsonify({"success": False, "error": "Failed to decode image"}), 400
+        
+        # Save temporarily for processing
+        temp_filename = f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.jpg"
+        temp_filepath = UPLOAD_DIR / temp_filename
+        cv2.imwrite(str(temp_filepath), img)
+        
+        # Process image with ALPR
+        results = alpr.predict(str(temp_filepath))
+        
+        # Prepare response data
+        detections = []
+        for result in results:
+            if result.ocr is not None and result.ocr.text:
+                # Calculate average confidence
+                conf = result.ocr.confidence
+                if isinstance(conf, list):
+                    avg_confidence = statistics.mean(conf)
+                else:
+                    avg_confidence = conf
+                
+                detection = {
+                    "registration": result.ocr.text,
+                    "confidence": float(avg_confidence),
+                    "bbox": [
+                        float(result.detection.bounding_box.x1),
+                        float(result.detection.bounding_box.y1),
+                        float(result.detection.bounding_box.x2),
+                        float(result.detection.bounding_box.y2),
+                    ]
+                }
+                detections.append(detection)
+                
+                # Log the registration
+                log_registration(
+                    plate_text=result.ocr.text,
+                    confidence=float(avg_confidence),
+                    image_filename=temp_filename
+                )
+        
+        # Clean up temporary file
+        temp_filepath.unlink()
+        
+        return jsonify({
+            "success": True,
+            "detections": detections,
+            "count": len(detections)
+        })
+    
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 if __name__ == '__main__':
