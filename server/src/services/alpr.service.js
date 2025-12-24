@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { listVehicles } from './vehicle.service.js';
+import { env } from '../config/env.js';
 
-const ALPR_SERVICE_URL = process.env.ALPR_SERVICE_URL || 'http://localhost:5001';
+const ALPR_SERVICE_URL = env.ALPR_SERVICE_URL;
 
 /**
  * Process an image through the ALPR service
