@@ -144,3 +144,14 @@ export const uploadEvidence = async (file) => {
 
 // Reports
 export const fetchDashboardSummary = () => httpClient.get('/reports/dashboard-summary');
+
+// ALPR endpoints
+export const processALPRImage = async (imageBase64) => {
+  const result = await httpClient.post('/alpr/process', { image: imageBase64 });
+  return result;
+};
+
+export const checkALPRHealth = async () => {
+  const result = await httpClient.get('/alpr/health');
+  return result;
+};

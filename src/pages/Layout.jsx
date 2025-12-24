@@ -2,7 +2,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, Database, FileText, Menu, X, AlertCircle, Upload, TrendingUp } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ParkingSquare, Shield, Database, FileText, Menu, X, AlertCircle, Upload, TrendingUp, Camera } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -52,6 +52,13 @@ function LayoutContent({ children, currentPageName }) {
       title: "Non-Compliance Report",
       url: createPageUrl("NonComplianceReport"),
       icon: AlertCircle,
+    });
+
+    // ALPR System - available to all approved users
+    navigationItems.push({
+      title: "ALPR System",
+      url: createPageUrl("ALPR"),
+      icon: Camera,
     });
   }
 

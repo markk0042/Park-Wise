@@ -30,6 +30,8 @@ import DeleteAllVehicles from "./DeleteAllVehicles";
 
 import TrendAnalysis from "./TrendAnalysis";
 
+import ALPR from "./ALPR";
+
 import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import { Clock, XCircle } from 'lucide-react';
@@ -64,6 +66,8 @@ const PAGES = {
     DeleteAllVehicles: DeleteAllVehicles,
     
     TrendAnalysis: TrendAnalysis,
+    
+    ALPR: ALPR,
     
 }
 
@@ -303,6 +307,15 @@ function PagesContent() {
                     element={
                         <ProtectedRoute>
                             <NonComplianceReport />
+                        </ProtectedRoute>
+                    } 
+                />
+                
+                <Route 
+                    path="/ALPR" 
+                    element={
+                        <ProtectedRoute>
+                            <ALPR />
                         </ProtectedRoute>
                     } 
                 />

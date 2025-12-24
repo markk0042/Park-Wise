@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALPR - License Plate Recognition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 2px dashed #667eea;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f0f0f0;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin: 20px 0;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+        }
+
+        .file-input-label:hover {
+            transform: scale(1.05);
+        }
+
+        .scan-button {
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s ease;
+        }
+
+        .scan-button:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+
+        .scan-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .results-section {
+            margin-top: 30px;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .result-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .result-card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .image-preview {
+            width: 100%;
+            border-radius: 10px;
+            margin-top: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .plate-result {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .plate-text {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .plate-confidence {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .logs-section {
+            margin-top: 30px;
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .refresh-button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .refresh-button:hover {
+            background: #764ba2;
+        }
+
+        .log-entry {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .log-timestamp {
+            color: #666;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+
+        .log-plate {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #c33;
+        }
+
+        .success {
+            background: #efe;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #3c3;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .input-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .tab-button {
+            padding: 12px 24px;
+            background: #e0e0e0;
+            color: #666;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-button:hover {
+            background: #d0d0d0;
+        }
+
+        .tab-button.active:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .camera-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 2px dashed #667eea;
+            text-align: center;
+        }
+
+        .video-preview {
+            width: 100%;
+            max-width: 640px;
+            border-radius: 10px;
+            margin: 20px auto;
+            display: block;
+            background: #000;
+            display: none;
+        }
+
+        .video-preview.active {
+            display: block;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .camera-button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .camera-button:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+
+        .camera-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .camera-button.stop {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .camera-button.capture {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            font-size: 1.2em;
+            padding: 15px 30px;
+        }
+
+        .captured-image {
+            width: 100%;
+            max-width: 640px;
+            border-radius: 10px;
+            margin: 20px auto;
+            display: block;
+            display: none;
+        }
+
+        .captured-image.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 ALPR Scanner</h1>
+            <p>Automatic License Plate Recognition System</p>
+        </div>
+
+        <div class="content">
+            <div class="upload-section">
+                <h2>Scan License Plate</h2>
+                <p>Choose how you want to provide the image</p>
+                
+                <div class="input-tabs">
+                    <button class="tab-button active" onclick="switchTab('upload')">📁 Upload File</button>
+                    <button class="tab-button" onclick="switchTab('camera')">📷 Use Camera</button>
+                </div>
+
+                <!-- Upload Tab -->
+                <div id="uploadTab" class="tab-content active">
+                    <p style="margin-bottom: 20px;">Select an image containing a license plate to scan</p>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="imageInput" accept="image/*" />
+                        <label for="imageInput" class="file-input-label">
+                            Choose Image File
+                        </label>
+                    </div>
+                    <div>
+                        <button class="scan-button" id="scanButton" disabled>Scan License Plate</button>
+                    </div>
+                    <div id="selectedFile" style="margin-top: 15px; color: #666;"></div>
+                </div>
+
+                <!-- Camera Tab -->
+                <div id="cameraTab" class="tab-content">
+                    <p style="margin-bottom: 20px;">Capture a photo using your device camera</p>
+                    <video id="videoPreview" class="video-preview" autoplay playsinline></video>
+                    <canvas id="captureCanvas" style="display: none;"></canvas>
+                    <img id="capturedImage" class="captured-image" alt="Captured image" />
+                    
+                    <div class="camera-controls">
+                        <button class="camera-button" id="startCameraButton" onclick="startCamera()">Start Camera</button>
+                        <button class="camera-button stop" id="stopCameraButton" onclick="stopCamera()" disabled>Stop Camera</button>
+                        <button class="camera-button capture" id="captureButton" onclick="capturePhoto()" disabled>📸 Capture Photo</button>
+                        <button class="scan-button" id="scanCapturedButton" onclick="scanCapturedImage()" disabled>Scan Captured Photo</button>
+                    </div>
+                    <div id="cameraStatus" style="margin-top: 15px; color: #666;"></div>
+                </div>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 15px;">Processing image...</p>
+            </div>
+
+            <div id="errorMessage"></div>
+            <div id="successMessage"></div>
+
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <div class="results-grid">
+                    <div class="result-card">
+                        <h3>Detected Plates</h3>
+                        <div id="platesList"></div>
+                    </div>
+                    <div class="result-card">
+                        <h3>Annotated Image</h3>
+                        <img id="annotatedImage" class="image-preview" alt="Annotated result" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="logs-section">
+                <div class="logs-header">
+                    <h3>Scanned Registrations Log</h3>
+                    <button class="refresh-button" onclick="loadLogs()">Refresh</button>
+                </div>
+                <div id="logsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const scanButton = document.getElementById('scanButton');
+        const selectedFileDiv = document.getElementById('selectedFile');
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('errorMessage');
+        const successDiv = document.getElementById('successMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const platesList = document.getElementById('platesList');
+        const annotatedImage = document.getElementById('annotatedImage');
+
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFileDiv.textContent = `Selected: ${file.name}`;
+                scanButton.disabled = false;
+            } else {
+                selectedFileDiv.textContent = '';
+                scanButton.disabled = true;
+            }
+        });
+
+        scanButton.addEventListener('click', async function() {
+            const file = imageInput.files[0];
+            if (!file) {
+                showError('Please select an image file first');
+                return;
+            }
+
+            // Clear previous results
+            clearMessages();
+            resultsSection.style.display = 'none';
+            loadingDiv.classList.add('active');
+            scanButton.disabled = true;
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const response = await fetch('/api/scan', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to process image');
+                }
+
+                if (data.success) {
+                    showSuccess(`Successfully detected ${data.count} license plate(s)`);
+                    displayResults(data);
+                    loadLogs(); // Refresh logs
+                } else {
+                    throw new Error('Processing failed');
+                }
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loadingDiv.classList.remove('active');
+                scanButton.disabled = false;
+            }
+        });
+
+        function displayResults(data) {
+            // Display plates
+            if (data.plates && data.plates.length > 0) {
+                platesList.innerHTML = '';
+                data.plates.forEach((plate, index) => {
+                    const plateDiv = document.createElement('div');
+                    plateDiv.className = 'plate-result';
+                    plateDiv.innerHTML = `
+                        <div class="plate-text">${plate.text}</div>
+                        <div class="plate-confidence">
+                            OCR Confidence: ${(plate.confidence * 100).toFixed(2)}% | 
+                            Detection Confidence: ${(plate.detection_confidence * 100).toFixed(2)}%
+                        </div>
+                    `;
+                    platesList.appendChild(plateDiv);
+                });
+            } else {
+                platesList.innerHTML = '<div class="empty-state">No license plates detected</div>';
+            }
+
+            // Display annotated image
+            if (data.annotated_image) {
+                annotatedImage.src = data.annotated_image;
+            }
+
+            resultsSection.style.display = 'block';
+        }
+
+        async function loadLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+
+                const logsList = document.getElementById('logsList');
+                if (data.logs && data.logs.length > 0) {
+                    logsList.innerHTML = '';
+                    data.logs.forEach(log => {
+                        const logDiv = document.createElement('div');
+                        logDiv.className = 'log-entry';
+                        if (log.plate_text) {
+                            logDiv.innerHTML = `
+                                <div class="log-timestamp">${log.timestamp}</div>
+                                <div class="log-plate">${log.plate_text}</div>
+                                <div style="color: #666; font-size: 0.85em; margin-top: 5px;">
+                                    Confidence: ${(log.confidence * 100).toFixed(2)}%
+                                    ${log.image_filename ? ` | Image: ${log.image_filename}` : ''}
+                                </div>
+                            `;
+                        } else if (log.raw) {
+                            logDiv.innerHTML = `<div>${log.raw}</div>`;
+                        }
+                        logsList.appendChild(logDiv);
+                    });
+                } else {
+                    logsList.innerHTML = '<div class="empty-state">No logs yet. Scan an image to start logging!</div>';
+                }
+            } catch (error) {
+                console.error('Error loading logs:', error);
+            }
+        }
+
+        function showError(message) {
+            errorDiv.innerHTML = `<div class="error">${message}</div>`;
+            successDiv.innerHTML = '';
+        }
+
+        function showSuccess(message) {
+            successDiv.innerHTML = `<div class="success">${message}</div>`;
+            errorDiv.innerHTML = '';
+        }
+
+        function clearMessages() {
+            errorDiv.innerHTML = '';
+            successDiv.innerHTML = '';
+        }
+
+        // Load logs on page load
+        loadLogs();
+
+        // Camera functionality
+        let stream = null;
+        let capturedImageData = null;
+        const videoPreview = document.getElementById('videoPreview');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const capturedImage = document.getElementById('capturedImage');
+        const startCameraButton = document.getElementById('startCameraButton');
+        const stopCameraButton = document.getElementById('stopCameraButton');
+        const captureButton = document.getElementById('captureButton');
+        const scanCapturedButton = document.getElementById('scanCapturedButton');
+        const cameraStatus = document.getElementById('cameraStatus');
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            if (tabName === 'upload') {
+                document.querySelector('.tab-button').classList.add('active');
+                document.getElementById('uploadTab').classList.add('active');
+                // Stop camera if running
+                if (stream) {
+                    stopCamera();
+                }
+            } else {
+                document.querySelectorAll('.tab-button')[1].classList.add('active');
+                document.getElementById('cameraTab').classList.add('active');
+            }
+        }
+
+        async function startCamera() {
+            try {
+                cameraStatus.textContent = 'Requesting camera access...';
+                cameraStatus.style.color = '#666';
+                
+                // Request camera access
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment', // Prefer back camera on mobile
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                
+                videoPreview.srcObject = stream;
+                videoPreview.classList.add('active');
+                capturedImage.classList.remove('active');
+                
+                startCameraButton.disabled = true;
+                stopCameraButton.disabled = false;
+                captureButton.disabled = false;
+                scanCapturedButton.disabled = true;
+                
+                cameraStatus.textContent = 'Camera active - Position license plate in view';
+                cameraStatus.style.color = '#27ae60';
+                
+                // Clear any previous captured image
+                capturedImageData = null;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                cameraStatus.textContent = `Error: ${error.message}. Make sure you grant camera permissions.`;
+                cameraStatus.style.color = '#e74c3c';
+                showError('Could not access camera. Please check permissions and try again.');
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            videoPreview.srcObject = null;
+            videoPreview.classList.remove('active');
+            
+            startCameraButton.disabled = false;
+            stopCameraButton.disabled = true;
+            captureButton.disabled = true;
+            scanCapturedButton.disabled = true;
+            
+            cameraStatus.textContent = 'Camera stopped';
+            cameraStatus.style.color = '#666';
+        }
+
+        function capturePhoto() {
+            if (!stream) {
+                showError('Camera is not active');
+                return;
+            }
+
+            try {
+                // Set canvas dimensions to match video
+                captureCanvas.width = videoPreview.videoWidth;
+                captureCanvas.height = videoPreview.videoHeight;
+                
+                // Draw video frame to canvas
+                const ctx = captureCanvas.getContext('2d');
+                ctx.drawImage(videoPreview, 0, 0);
+                
+                // Convert canvas to blob
+                captureCanvas.toBlob(function(blob) {
+                    if (blob) {
+                        // Create object URL for preview
+                        const imageUrl = URL.createObjectURL(blob);
+                        capturedImage.src = imageUrl;
+                        capturedImage.classList.add('active');
+                        
+                        // Store blob for scanning
+                        capturedImageData = blob;
+                        
+                        // Enable scan button
+                        scanCapturedButton.disabled = false;
+                        
+                        cameraStatus.textContent = 'Photo captured! Click "Scan Captured Photo" to process.';
+                        cameraStatus.style.color = '#27ae60';
+                    } else {
+                        showError('Failed to capture photo');
+                    }
+                }, 'image/jpeg', 0.95);
+            } catch (error) {
+                console.error('Error capturing photo:', error);
+                showError('Failed to capture photo: ' + error.message);
+            }
+        }
+
+        async function scanCapturedImage() {
+            if (!capturedImageData) {
+                showError('No photo captured. Please capture a photo first.');
+                return;
+            }
+
+            // Clear previous results
+            clearMessages();
+            resultsSection.style.display = 'none';
+            loadingDiv.classList.add('active');
+            scanCapturedButton.disabled = true;
+
+            const formData = new FormData();
+            formData.append('image', capturedImageData, 'captured-photo.jpg');
+
+            try {
+                const response = await fetch('/api/scan', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to process image');
+                }
+
+                if (data.success) {
+                    showSuccess(`Successfully detected ${data.count} license plate(s)`);
+                    displayResults(data);
+                    loadLogs(); // Refresh logs
+                } else {
+                    throw new Error('Processing failed');
+                }
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                loadingDiv.classList.remove('active');
+                scanCapturedButton.disabled = false;
+            }
+        }
+
+        // Stop camera when switching tabs or leaving page
+        window.addEventListener('beforeunload', function() {
+            if (stream) {
+                stopCamera();
+            }
+        });
+    </script>
+</body>
+</html>
+

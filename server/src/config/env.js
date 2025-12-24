@@ -26,6 +26,8 @@ const envSchema = z.object({
   // Gmail configuration (alternative to SMTP)
   GMAIL_USER: z.string().email().optional(),
   GMAIL_APP_PASSWORD: z.string().optional(),
+  // ALPR service configuration
+  ALPR_SERVICE_URL: z.string().url().optional().default('http://localhost:5001'),
 });
 
 const parsed = envSchema.safeParse(process.env);
