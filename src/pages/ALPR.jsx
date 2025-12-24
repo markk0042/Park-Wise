@@ -162,17 +162,27 @@ export default function ALPR() {
 
       await createParkingLog(logData);
 
-      toast({
+      const successToast = toast({
         title: 'Vehicle Logged Successfully',
         description: `Plate ${plate.text} has been logged as ${parkingType} parking.`,
       });
+
+      // Auto-dismiss after 3 seconds
+      setTimeout(() => {
+        successToast.dismiss();
+      }, 3000);
     } catch (err) {
       console.error('Error logging vehicle:', err);
-      toast({
+      const errorToast = toast({
         title: 'Error Logging Vehicle',
         description: err.message || 'Failed to log vehicle. Please try again.',
         variant: 'destructive',
       });
+
+      // Auto-dismiss after 3 seconds
+      setTimeout(() => {
+        errorToast.dismiss();
+      }, 3000);
     } finally {
       setLogging(prev => ({ ...prev, [index]: false }));
     }
