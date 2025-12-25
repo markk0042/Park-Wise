@@ -47,7 +47,7 @@ export default function ALPR() {
   const processingIntervalRef = useRef(null);
   const lastProcessTimeRef = useRef(0);
   
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
   const { profile: user } = useAuth();
 
   // Fetch vehicles for searching
@@ -483,11 +483,20 @@ export default function ALPR() {
     try {
       await createParkingLog(logData);
       
-      toast({
+      const successToast = toast({
         title: 'Vehicle Logged Successfully',
         description: `Plate ${regToUse} has been logged.`,
         duration: 3000,
       });
+      
+      // Ensure toast dismisses after 3 seconds (backup to duration parameter)
+      setTimeout(() => {
+        if (successToast?.id) {
+          dismiss(successToast.id);
+        } else if (successToast?.dismiss) {
+          successToast.dismiss();
+        }
+      }, 3000);
 
       setLoggingSuccess(true);
       setTimeout(() => {
@@ -511,6 +520,11 @@ export default function ALPR() {
     setLoggingSuccess(false);
     setMatchedVehicle(null);
     handleClear();
+    // Ensure camera stays active and returns to preview mode
+    if (isCameraActive && stream) {
+      setMode("preview");
+      // Camera should already be active, just ensure it's visible
+    }
   };
 
   const handleClear = () => {
@@ -519,6 +533,8 @@ export default function ALPR() {
     setLiveDetection(null);
     setMode("preview");
     setError(null);
+    // Don't clear camera state - keep it active if it was active
+    // The camera should remain running for continuous scanning
   };
 
   const startCamera = async () => {
@@ -594,17 +610,18 @@ export default function ALPR() {
       {mode === "preview" && (
         <>
           <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
-            {/* Camera Video - Always render */}
-            {isCameraActive ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-900">
+            {/* Camera Video - Always render when camera is active */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${isCameraActive ? 'block' : 'hidden'}`}
+            />
+            
+            {/* Placeholder when camera not active */}
+            {!isCameraActive && (
+              <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-900">
                 <Camera className="h-16 w-16 text-slate-400" />
                 <div className="text-white text-center">
                   <p className="text-lg font-semibold mb-2">Camera Not Started</p>
