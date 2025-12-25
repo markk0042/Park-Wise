@@ -474,9 +474,15 @@ export default function ALPR() {
         videoRef.current.srcObject = mediaStream;
         setStream(mediaStream);
         setIsCameraActive(true);
+        // Ensure video plays
+        videoRef.current.play().catch(err => {
+          console.error('Video play error:', err);
+        });
       }
     } catch (err) {
+      console.error('Camera start error:', err);
       setError('Failed to access camera: ' + (err?.message || 'Unknown error'));
+      setIsCameraActive(false);
     }
   };
 
@@ -526,6 +532,13 @@ export default function ALPR() {
         </Alert>
       )}
 
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Camera Preview Mode - Always show camera area like mobile app */}
       {mode === "preview" && (
         <>
@@ -536,6 +549,7 @@ export default function ALPR() {
                 ref={videoRef}
                 autoPlay
                 playsInline
+                muted
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -598,7 +612,7 @@ export default function ALPR() {
                 }}
                 variant={autoCapture && isCameraActive ? "default" : "outline"}
                 className={autoCapture && isCameraActive ? "bg-green-600 hover:bg-green-700 text-white" : "bg-white/20 hover:bg-white/30 text-white border-white/30"}
-                disabled={processing || !isCameraActive}
+                disabled={processing}
                 size="sm"
               >
                 {!isCameraActive ? (
