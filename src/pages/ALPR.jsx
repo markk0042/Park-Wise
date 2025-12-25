@@ -489,7 +489,7 @@ export default function ALPR() {
     stopAutoCapture();
   };
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
