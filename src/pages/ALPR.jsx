@@ -40,12 +40,12 @@ export default function ALPR() {
   const [loggingSuccess, setLoggingSuccess] = useState(false);
   const [logging, setLogging] = useState(false);
   
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [stream, setStream] = useState(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const lastProcessTimeRef = useRef<number>(0);
+  const processingIntervalRef = useRef(null);
+  const lastProcessTimeRef = useRef(0);
   
   const { toast } = useToast();
   const { profile: user } = useAuth();
