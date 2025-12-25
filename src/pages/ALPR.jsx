@@ -65,7 +65,7 @@ export default function ALPR() {
 
   // Handle video stream attachment
   useEffect(() => {
-    if (stream && videoRef.current && isCameraActive) {
+    if (stream && videoRef.current) {
       console.log('[ALPR] Attaching stream to video element');
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(err => {
@@ -74,7 +74,7 @@ export default function ALPR() {
     } else if (!stream && videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  }, [stream, isCameraActive]);
+  }, [stream]);
 
   // Handle auto-capture mode
   useEffect(() => {
@@ -486,12 +486,13 @@ export default function ALPR() {
       const successToast = toast({
         title: 'Vehicle Logged Successfully',
         description: `Plate ${regToUse} has been logged.`,
-        duration: 3000,
       });
       
-      // Ensure toast dismisses after 3 seconds (backup to duration parameter)
+      // Auto-dismiss toast after 3 seconds
       setTimeout(() => {
-        if (successToast?.id) {
+        if (successToast?.update) {
+          successToast.update({ open: false });
+        } else if (successToast?.id) {
           dismiss(successToast.id);
         } else if (successToast?.dismiss) {
           successToast.dismiss();
@@ -504,12 +505,22 @@ export default function ALPR() {
       }, 1500);
     } catch (err) {
       console.error('Error logging vehicle:', err);
-      toast({
+      const errorToast = toast({
         title: 'Error Logging Vehicle',
         description: err.message || 'Failed to log vehicle. Please try again.',
         variant: 'destructive',
-        duration: 3000,
       });
+      
+      // Auto-dismiss toast after 3 seconds
+      setTimeout(() => {
+        if (errorToast?.update) {
+          errorToast.update({ open: false });
+        } else if (errorToast?.id) {
+          dismiss(errorToast.id);
+        } else if (errorToast?.dismiss) {
+          errorToast.dismiss();
+        }
+      }, 3000);
     } finally {
       setLogging(false);
     }
@@ -519,12 +530,14 @@ export default function ALPR() {
     setShowLogging(false);
     setLoggingSuccess(false);
     setMatchedVehicle(null);
-    handleClear();
-    // Ensure camera stays active and returns to preview mode
-    if (isCameraActive && stream) {
-      setMode("preview");
-      // Camera should already be active, just ensure it's visible
-    }
+    // Clear detection and image but keep camera active
+    setCapturedImage(null);
+    setDetection(null);
+    setLiveDetection(null);
+    setMode("preview");
+    setError(null);
+    // Camera and stream should remain active - don't clear them
+    // This allows continuous scanning after logging
   };
 
   const handleClear = () => {
