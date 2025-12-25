@@ -6,34 +6,52 @@ const ALPR_SERVICE_URL = env.ALPR_SERVICE_URL;
 
 /**
  * Process an image through the ALPR service
- * @param {string} imageBase64 - Base64 encoded image
+ * @param {string} imageBase64 - Base64 encoded image (without data URL prefix)
  * @returns {Promise<Object>} ALPR detection results
  */
 export const processALPRImage = async (imageBase64) => {
   try {
-    // Convert base64 to buffer for multipart/form-data
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
-    
-    // Create form data (form-data is CommonJS, so we use createRequire)
-    const { createRequire } = await import('module');
-    const require = createRequire(import.meta.url);
-    const FormData = require('form-data');
-    
-    const form = new FormData();
-    form.append('image', imageBuffer, {
-      filename: 'image.jpg',
-      contentType: 'image/jpeg',
-    });
-
-    const response = await axios.post(`${ALPR_SERVICE_URL}/api/scan`, form, {
-      headers: form.getHeaders(),
+    // Send base64 image as JSON (matching mobile app format)
+    const response = await axios.post(`${ALPR_SERVICE_URL}/process`, {
+      image: imageBase64
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
       timeout: 30000, // 30 second timeout for processing
     });
 
-    return response.data;
+    // Convert mobile app response format to web app format
+    const data = response.data;
+    
+    if (!data.success) {
+      return {
+        success: false,
+        plates: [],
+        count: 0,
+        message: data.error || 'No license plates detected',
+      };
+    }
+
+    // Convert detections array to plates array format
+    const plates = (data.detections || []).map((detection) => ({
+      text: detection.registration,
+      confidence: detection.confidence,
+      detection_confidence: detection.bbox ? detection.bbox[0] : detection.confidence,
+      bbox: detection.bbox,
+    }));
+
+    return {
+      success: true,
+      plates: plates,
+      count: plates.length,
+      annotated_image: data.annotated_image,
+    };
   } catch (error) {
     if (error.response) {
-      throw new Error(error.response.data.error || 'ALPR processing failed');
+      const errorData = error.response.data;
+      const errorMessage = errorData?.error || errorData?.message || 'ALPR processing failed';
+      throw new Error(errorMessage);
     } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
       throw new Error('ALPR service is not available. Please ensure the service is running.');
     } else {
