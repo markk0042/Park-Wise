@@ -63,6 +63,18 @@ export default function ALPR() {
     checkServiceHealth();
   }, []);
 
+  // Handle video stream attachment
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(err => {
+        console.error('Video play error:', err);
+      });
+    } else if (!stream && videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, [stream]);
+
   // Handle auto-capture mode
   useEffect(() => {
     if (mode === "preview" && autoCapture && isCameraActive) {
@@ -470,19 +482,14 @@ export default function ALPR() {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        setStream(mediaStream);
-        setIsCameraActive(true);
-        // Ensure video plays
-        videoRef.current.play().catch(err => {
-          console.error('Video play error:', err);
-        });
-      }
+      setStream(mediaStream);
+      setIsCameraActive(true);
+      setError(null);
     } catch (err) {
       console.error('Camera start error:', err);
       setError('Failed to access camera: ' + (err?.message || 'Unknown error'));
       setIsCameraActive(false);
+      setStream(null);
     }
   };
 
@@ -542,18 +549,19 @@ export default function ALPR() {
       {/* Camera Preview Mode - Always show camera area like mobile app */}
       {mode === "preview" && (
         <>
-          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
-            {/* Camera Video or Placeholder */}
-            {isCameraActive ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-900">
+          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
+            {/* Camera Video - Always render */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+            
+            {/* Placeholder overlay when camera not active */}
+            {!isCameraActive && (
+              <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-900 z-0">
                 <Camera className="h-16 w-16 text-slate-400" />
                 <div className="text-white text-center">
                   <p className="text-lg font-semibold mb-2">Camera Not Started</p>
@@ -562,16 +570,16 @@ export default function ALPR() {
               </div>
             )}
             
-            {/* Live Detection Overlay */}
+            {/* Live Detection Overlay - Top center, doesn't cover much */}
             {liveDetection && isCameraActive && (
-              <div className="absolute top-4 left-0 right-0 flex justify-center z-10">
-                <div className={`px-4 py-3 rounded-lg ${
+              <div className="absolute top-3 left-0 right-0 flex justify-center z-20">
+                <div className={`px-3 py-2 rounded-lg shadow-lg ${
                   liveDetection.confidence >= 0.5 
-                    ? 'bg-green-600/90' 
-                    : 'bg-blue-600/90'
+                    ? 'bg-green-600/95' 
+                    : 'bg-blue-600/95'
                 }`}>
                   <div className="text-white text-center">
-                    <div className="text-xl font-bold font-mono">
+                    <div className="text-lg font-bold font-mono">
                       {liveDetection.registration}
                     </div>
                     <div className="text-xs opacity-90">
@@ -584,7 +592,7 @@ export default function ALPR() {
                     )}
                     {autoCapture && liveDetection.confidence < 0.5 && (
                       <div className="text-xs mt-1 opacity-80">
-                        Need {Math.round((0.5 - liveDetection.confidence) * 100)}% more confidence
+                        Need {Math.round((0.5 - liveDetection.confidence) * 100)}% more
                       </div>
                     )}
                   </div>
@@ -592,16 +600,16 @@ export default function ALPR() {
               </div>
             )}
 
-            {/* Processing Indicator */}
+            {/* Processing Indicator - Top right, small */}
             {processing && isCameraActive && (
-              <div className="absolute top-20 left-0 right-0 flex justify-center items-center gap-2 z-10">
-                <Loader2 className="h-4 w-4 animate-spin text-white" />
-                <span className="text-white text-sm font-medium">Scanning...</span>
+              <div className="absolute top-3 right-3 flex items-center gap-2 bg-black/70 px-3 py-1.5 rounded-full z-20">
+                <Loader2 className="h-3 w-3 animate-spin text-white" />
+                <span className="text-white text-xs font-medium">Scanning...</span>
               </div>
             )}
 
-            {/* Controls Overlay - Always visible */}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-4 flex items-center justify-around z-10">
+            {/* Minimal Controls Overlay - Bottom, compact */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/60 to-transparent p-3 flex items-center justify-around z-20">
               <Button
                 onClick={() => {
                   if (!isCameraActive) {
@@ -611,38 +619,38 @@ export default function ALPR() {
                   }
                 }}
                 variant={autoCapture && isCameraActive ? "default" : "outline"}
-                className={autoCapture && isCameraActive ? "bg-green-600 hover:bg-green-700 text-white" : "bg-white/20 hover:bg-white/30 text-white border-white/30"}
+                className={autoCapture && isCameraActive ? "bg-green-600 hover:bg-green-700 text-white border-0" : "bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"}
                 disabled={processing}
                 size="sm"
               >
                 {!isCameraActive ? (
                   <>
-                    <Camera className="h-4 w-4 mr-1" />
-                    Start
+                    <Camera className="h-3.5 w-3.5 mr-1" />
+                    <span className="text-xs">Start</span>
                   </>
                 ) : autoCapture ? (
-                  "Auto ON"
+                  <span className="text-xs">Auto ON</span>
                 ) : (
-                  "Auto OFF"
+                  <span className="text-xs">Auto OFF</span>
                 )}
               </Button>
 
               <Button
                 onClick={isCameraActive ? handleManualCapture : startCamera}
-                className="w-16 h-16 rounded-full bg-white hover:bg-gray-200 p-0 border-4 border-white"
+                className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
                 disabled={processing}
               >
-                <div className="w-12 h-12 rounded-full bg-gray-800" />
+                <div className="w-10 h-10 rounded-full bg-gray-800" />
               </Button>
 
               <Button
                 onClick={handlePickFromGallery}
                 variant="outline"
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                className="bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"
                 disabled={processing}
                 size="sm"
               >
-                <Upload className="h-4 w-4" />
+                <Upload className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
