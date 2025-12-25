@@ -1,126 +1,290 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { processALPRImage, checkALPRHealth, createParkingLog } from '@/api';
+import { fetchVehicles } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Camera, Upload, Loader2, CheckCircle2, XCircle, AlertCircle, FileText } from 'lucide-react';
+import { Camera, Upload, Loader2, CheckCircle2, XCircle, AlertCircle, FileText, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+
+// Get best detection from results (highest confidence)
+const getBestDetection = (detections) => {
+  if (!detections || detections.length === 0) {
+    return null;
+  }
+  const sorted = [...detections].sort((a, b) => b.confidence - a.confidence);
+  return sorted[0];
+};
+
+// Normalize registration by removing dashes
+const normalizeRegistration = (reg) => {
+  if (!reg) return "";
+  return reg.replace(/-/g, "").toUpperCase().trim();
+};
 
 export default function ALPR() {
-  const [image, setImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [processing, setProcessing] = useState(false);
-  const [results, setResults] = useState(null);
-  const [error, setError] = useState(null);
-  const [serviceStatus, setServiceStatus] = useState(null);
-  const [serviceChecked, setServiceChecked] = useState(false); // Track if service check is complete
-  const [logging, setLogging] = useState({}); // Track logging state per plate
-  const fileInputRef = useRef(null);
-  const videoRef = useRef(null);
-  const [stream, setStream] = useState(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [mode, setMode] = useState("preview");
   const [autoCapture, setAutoCapture] = useState(false);
-  const autoCaptureIntervalRef = useRef(null);
-  const { toast, dismiss } = useToast();
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [detection, setDetection] = useState(null);
+  const [serviceHealth, setServiceHealth] = useState(null);
+  const [serviceChecked, setServiceChecked] = useState(false);
+  const [liveDetection, setLiveDetection] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  const [showLogging, setShowLogging] = useState(false);
+  const [matchedVehicle, setMatchedVehicle] = useState(null);
+  const [loggingSuccess, setLoggingSuccess] = useState(false);
+  const [logging, setLogging] = useState(false);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastProcessTimeRef = useRef<number>(0);
+  
+  const { toast } = useToast();
   const { profile: user } = useAuth();
 
-  // Check service health on mount
-  React.useEffect(() => {
+  // Fetch vehicles for searching
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: () => fetchVehicles(),
+    enabled: !!user,
+    staleTime: 60 * 1000,
+  });
+
+  // Check ALPR service health on mount
+  useEffect(() => {
     checkServiceHealth();
   }, []);
+
+  // Handle auto-capture mode
+  useEffect(() => {
+    if (mode === "preview" && autoCapture && isCameraActive) {
+      startAutoCapture();
+    } else {
+      stopAutoCapture();
+    }
+    return () => {
+      stopAutoCapture();
+    };
+  }, [mode, autoCapture, isCameraActive]);
 
   const checkServiceHealth = async () => {
     try {
       const result = await checkALPRHealth();
-      setServiceStatus(result.service_available);
-    } catch (err) {
-      setServiceStatus(false);
+      setServiceHealth(result.service_available);
+    } catch {
+      setServiceHealth(false);
     } finally {
-      setServiceChecked(true); // Mark that we've checked the service
+      setServiceChecked(true);
     }
   };
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = event.target.result;
-        setImage(base64);
-        setImagePreview(base64);
-        setResults(null);
-        setError(null);
-      };
-      reader.readAsDataURL(file);
+  const startAutoCapture = () => {
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+    }
+
+    console.log("[ALPR] Starting auto-capture scanning...");
+    scanForPlate(); // First scan immediately
+    processingIntervalRef.current = setInterval(() => {
+      scanForPlate();
+    }, 2000);
+  };
+
+  const stopAutoCapture = () => {
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+      processingIntervalRef.current = null;
     }
   };
 
-  const handleImageUpload = () => {
-    fileInputRef.current?.click();
-  };
-
-  const startCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // Use back camera on mobile
+  const scanForPlate = async () => {
+    if (!videoRef.current || processing || serviceHealth === false || !autoCapture) {
+      console.log("[ALPR] Scan skipped:", { 
+        hasCamera: !!videoRef.current, 
+        processing, 
+        serviceHealth, 
+        autoCapture 
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        setStream(mediaStream);
-        setIsCameraActive(true);
+      return;
+    }
+
+    const now = Date.now();
+    // Throttle: don't process if last process was less than 2 seconds ago
+    if (now - lastProcessTimeRef.current < 2000) {
+      console.log("[ALPR] Throttled - too soon since last scan");
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      lastProcessTimeRef.current = now;
+      console.log("[ALPR] Starting scan...");
+
+      // Double-check camera is still available before capturing
+      if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
+        console.warn("[ALPR] Camera not ready");
+        setProcessing(false);
+        return;
       }
-    } catch (err) {
-      setError('Failed to access camera: ' + err.message);
-    }
-  };
 
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-      setIsCameraActive(false);
-    }
-    if (autoCaptureIntervalRef.current) {
-      clearInterval(autoCaptureIntervalRef.current);
-      autoCaptureIntervalRef.current = null;
-      setAutoCapture(false);
-    }
-  };
-
-  const captureFromCamera = () => {
-    if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+      // Capture frame from video
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setProcessing(false);
+        return;
+      }
+      
       ctx.drawImage(videoRef.current, 0, 0);
-      const base64 = canvas.toDataURL('image/jpeg');
-      return base64;
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+
+      console.log("[ALPR] Photo captured, processing...");
+      
+      // Process the frame
+      const data = await processALPRImage(imageBase64);
+      
+      // Convert web API response to mobile format
+      const detections = (data.plates || []).map((plate) => ({
+        registration: plate.text,
+        confidence: plate.confidence,
+      }));
+      
+      const bestDetection = getBestDetection(detections);
+
+      if (bestDetection) {
+        console.log("[ALPR] Detection found:", bestDetection.registration, "Confidence:", bestDetection.confidence);
+        setLiveDetection(bestDetection);
+
+        // Auto-capture if confidence is high enough (50%)
+        if (autoCapture && bestDetection.confidence >= 0.5) {
+          console.log("[ALPR] Auto-capturing - confidence threshold met!");
+          await handleAutoCapture();
+        } else {
+          console.log("[ALPR] Detection found but confidence too low:", bestDetection.confidence, "< 0.5");
+        }
+      } else {
+        console.log("[ALPR] No detection found in frame");
+        setLiveDetection(null);
+      }
+    } catch (error) {
+      const errorMessage = error?.message || "";
+      
+      // Handle errors gracefully
+      if (errorMessage.includes("500") || errorMessage.includes("PIL") || errorMessage.includes("ANTIALIAS")) {
+        setServiceHealth(false);
+        setLiveDetection(null);
+        stopAutoCapture();
+        console.error("[ALPR] Backend error detected:", errorMessage);
+      } else if (errorMessage.includes("ALPR service") || errorMessage.includes("Failed to connect")) {
+        setServiceHealth(false);
+        stopAutoCapture();
+        console.error("[ALPR] Connection error:", errorMessage);
+      } else {
+        console.warn("[ALPR] Transient error during scan, continuing:", errorMessage);
+      }
+    } finally {
+      setProcessing(false);
     }
-    return null;
   };
 
-  const captureAndProcess = async () => {
-    // Don't capture if already processing
-    if (processing) {
-      return;
+  const handleAutoCapture = async () => {
+    if (!videoRef.current) return;
+
+    // Stop scanning immediately
+    stopAutoCapture();
+    setLiveDetection(null);
+    setProcessing(true);
+
+    try {
+      // Capture a fresh, high-quality image
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setProcessing(false);
+        return;
+      }
+      
+      ctx.drawImage(videoRef.current, 0, 0);
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
+
+      // Set the captured image immediately
+      setCapturedImage(imageBase64);
+      setMode("manual");
+      
+      // Process the captured image
+      await processImageWithBase64(imageBase64);
+    } catch (error) {
+      console.error("[ALPR] Auto-capture error:", error?.message);
+      setProcessing(false);
+      setMode("preview");
+      // Resume auto-capture after a short delay
+      setTimeout(() => {
+        if (autoCapture) {
+          setAutoCapture(true);
+        }
+      }, 1000);
     }
+  };
 
-    // Capture image from camera
-    const capturedImage = captureFromCamera();
-    if (!capturedImage) {
-      return; // Camera not ready
+  const handleManualCapture = async () => {
+    if (!videoRef.current) return;
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      ctx.drawImage(videoRef.current, 0, 0);
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+      setCapturedImage(imageBase64);
+      setDetection(null);
+      setMode("manual");
+      stopAutoCapture();
+      await processImageWithBase64(imageBase64);
+    } catch (error) {
+      console.error("[ALPR] Manual capture error:", error?.message);
+      toast({
+        title: "Error",
+        description: `Failed to capture image: ${error.message}`,
+        variant: "destructive",
+        duration: 3000,
+      });
     }
+  };
 
-    // Set image state
-    setImage(capturedImage);
-    setImagePreview(capturedImage);
-    setResults(null);
-    setError(null);
+  const handlePickFromGallery = () => {
+    fileInputRef.current?.click();
+  };
 
-    // Process the captured image
-    await processImageWithBase64(capturedImage);
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target.result;
+        setCapturedImage(base64);
+        setDetection(null);
+        setMode("manual");
+        stopAutoCapture();
+        await processImageWithBase64(base64);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const processImageWithBase64 = async (imageBase64) => {
@@ -131,115 +295,214 @@ export default function ALPR() {
 
     setProcessing(true);
     setError(null);
-    setResults(null);
+    setDetection(null);
 
     try {
       const result = await processALPRImage(imageBase64);
       
-      if (result.success && result.plates && result.plates.length > 0) {
-        setResults(result);
+      // Convert web API response to mobile format
+      const detections = (result.plates || []).map((plate) => ({
+        registration: plate.text,
+        confidence: plate.confidence,
+      }));
+      
+      const bestDetection = getBestDetection(detections);
+      
+      if (bestDetection) {
+        setDetection(bestDetection);
       } else {
-        setError('No license plates detected in the image');
+        setDetection(null);
       }
     } catch (err) {
-      setError(err.message || 'Failed to process image');
-      console.error('ALPR processing error:', err);
+      const errorMessage = err?.message || "";
+      const isNormalFailure = 
+        errorMessage.includes("No license plate") || 
+        errorMessage.includes("No detection");
+      
+      if (!isNormalFailure) {
+        setError(err.message || 'Failed to process image');
+        console.error('ALPR processing error:', err);
+      }
     } finally {
       setProcessing(false);
     }
   };
 
-  const toggleAutoCapture = () => {
-    if (autoCapture) {
-      // Stop auto capture
-      if (autoCaptureIntervalRef.current) {
-        clearInterval(autoCaptureIntervalRef.current);
-        autoCaptureIntervalRef.current = null;
-      }
-      setAutoCapture(false);
-    } else {
-      // Start auto capture
-      if (!isCameraActive) {
-        startCamera().then(() => {
-          // Wait a bit for camera to initialize before starting auto-capture
-          setTimeout(() => {
-            setAutoCapture(true);
-            autoCaptureIntervalRef.current = setInterval(() => {
-              captureAndProcess();
-            }, 3000); // Capture every 3 seconds
-          }, 1000);
-        });
-      } else {
-        setAutoCapture(true);
-        autoCaptureIntervalRef.current = setInterval(() => {
-          captureAndProcess();
-        }, 3000); // Capture every 3 seconds
-      }
-    }
-  };
-
-  const processImage = async () => {
-    if (!image) {
-      setError('Please select or capture an image first');
+  // Search for vehicle by registration
+  const searchVehicle = (registration) => {
+    if (!vehicles || vehicles.length === 0) {
+      setMatchedVehicle(null);
       return;
     }
 
-    await processImageWithBase64(image);
+    const searchTerm = registration.trim();
+    const searchUpper = searchTerm.toUpperCase().trim();
+    const normalizedSearch = normalizeRegistration(searchTerm);
+
+    // Step 1: Try exact match (normalized)
+    let vehicle = vehicles.find((v) => {
+      if (!v.is_active) return false;
+      const normalizedReg = normalizeRegistration(v.registration_plate || "");
+      return normalizedReg === normalizedSearch;
+    });
+
+    // Step 2: Check split registrations
+    if (!vehicle) {
+      vehicle = vehicles.find((v) => {
+        if (!v.is_active) return false;
+        const regUpper = v.registration_plate?.toUpperCase() || "";
+        const normalizedReg = normalizeRegistration(v.registration_plate || "");
+        
+        if (normalizedReg.includes(normalizedSearch)) return true;
+        if (regUpper.includes(searchUpper)) return true;
+        
+        if (regUpper.includes('/')) {
+          const regParts = regUpper
+            .split(/\s*\/\s*/)
+            .map((p) => normalizeRegistration(p))
+            .filter((p) => p.length > 0);
+          return regParts.some((part) => part === normalizedSearch);
+        }
+        return false;
+      });
+    }
+
+    // Step 3: Check permit number
+    if (!vehicle) {
+      vehicle = vehicles.find((v) => 
+        v.permit_number && 
+        v.permit_number.trim().toUpperCase() === searchUpper &&
+        v.is_active
+      );
+    }
+
+    setMatchedVehicle(vehicle);
   };
 
-  const logVehicle = async (plate, index) => {
-    setLogging(prev => ({ ...prev, [index]: true }));
+  const handleUseRegistration = () => {
+    const regToUse = detection?.registration || liveDetection?.registration;
+    if (!regToUse) return;
+
+    searchVehicle(regToUse);
+    setShowLogging(true);
+  };
+
+  const handleLogVehicle = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to log vehicles.",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+
+    const regToUse = detection?.registration || liveDetection?.registration;
+    if (!regToUse) return;
+
+    setLogging(true);
+
+    let logData;
+    if (matchedVehicle) {
+      logData = {
+        registration_plate: matchedVehicle.registration_plate,
+        parking_type: matchedVehicle.parking_type,
+        notes: matchedVehicle.permit_number
+          ? `Permit: ${matchedVehicle.permit_number}`
+          : "No permit",
+        log_date: format(new Date(), "yyyy-MM-dd"),
+        log_time: format(new Date(), "HH:mm"),
+      };
+    } else {
+      logData = {
+        registration_plate: regToUse.toUpperCase().trim(),
+        parking_type: "Red",
+        notes: "No permit - Unregistered vehicle",
+        log_date: format(new Date(), "yyyy-MM-dd"),
+        log_time: format(new Date(), "HH:mm"),
+      };
+    }
 
     try {
-      // Use parking_type from vehicle_info if available, otherwise default to Green
-      const parkingType = plate.vehicle_info?.parking_type || 'Green';
-      
-      const logData = {
-        registration_plate: plate.text,
-        parking_type: parkingType,
-        notes: `Logged via ALPR - Confidence: ${(plate.confidence * 100).toFixed(1)}%`,
-      };
-
       await createParkingLog(logData);
-
-      // Toast will auto-dismiss after 3 seconds via duration parameter
+      
       toast({
         title: 'Vehicle Logged Successfully',
-        description: `Plate ${plate.text} has been logged as ${parkingType} parking.`,
-        duration: 3000, // Auto-dismiss after 3 seconds
+        description: `Plate ${regToUse} has been logged.`,
+        duration: 3000,
       });
 
-      // Clear image and results to allow scanning next vehicle
-      setImage(null);
-      setImagePreview(null);
-      setResults(null);
-      setError(null);
+      setLoggingSuccess(true);
+      setTimeout(() => {
+        handleLoggingComplete();
+      }, 1500);
     } catch (err) {
       console.error('Error logging vehicle:', err);
-      // Toast will auto-dismiss after 3 seconds via duration parameter
       toast({
         title: 'Error Logging Vehicle',
         description: err.message || 'Failed to log vehicle. Please try again.',
         variant: 'destructive',
-        duration: 3000, // Auto-dismiss after 3 seconds
+        duration: 3000,
       });
     } finally {
-      setLogging(prev => ({ ...prev, [index]: false }));
+      setLogging(false);
     }
   };
+
+  const handleLoggingComplete = () => {
+    setShowLogging(false);
+    setLoggingSuccess(false);
+    setMatchedVehicle(null);
+    handleClear();
+  };
+
+  const handleClear = () => {
+    setCapturedImage(null);
+    setDetection(null);
+    setLiveDetection(null);
+    setMode("preview");
+    setError(null);
+  };
+
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        setStream(mediaStream);
+        setIsCameraActive(true);
+      }
+    } catch (err) {
+      setError('Failed to access camera: ' + (err?.message || 'Unknown error'));
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      setIsCameraActive(false);
+    }
+    stopAutoCapture();
+  };
+
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex flex-col items-center justify-center relative">
         <div className="text-center">
-          <h1 className="text-3xl font-bold">ALPR System</h1>
+          <h1 className="text-3xl font-bold">ALPR Scanner</h1>
           <p className="text-muted-foreground mt-1">
             Automatic License Plate Recognition
           </p>
         </div>
-        {serviceStatus !== null && (
+        {serviceChecked && serviceHealth !== null && (
           <div className="absolute top-0 right-0 flex items-center gap-2">
-            {serviceStatus ? (
+            {serviceHealth ? (
               <>
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
                 <span className="text-sm text-green-600">Service Online</span>
@@ -254,7 +517,7 @@ export default function ALPR() {
         )}
       </div>
 
-      {serviceChecked && !serviceStatus && (
+      {serviceChecked && !serviceHealth && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -263,226 +526,279 @@ export default function ALPR() {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Image Input Section */}
+      {/* Camera Preview Mode */}
+      {mode === "preview" && isCameraActive && (
         <Card>
           <CardHeader>
-            <CardTitle>Image Input</CardTitle>
+            <CardTitle>Camera Preview</CardTitle>
             <CardDescription>
-              Upload an image or capture from camera
+              {autoCapture 
+                ? `Auto-capture: Scanning every 2s... Will capture when plate detected (≥50% confidence)${processing ? " [Processing...]" : ""}`
+                : "Manual mode - Tap capture button to take photo"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Camera Preview */}
-            {isCameraActive && (
-              <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            )}
-
-            {/* Image Preview */}
-            {imagePreview && !isCameraActive && (
-              <div className="relative w-full aspect-video bg-slate-100 rounded-lg overflow-hidden">
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            )}
-
-            {/* Controls */}
-            <div className="flex flex-wrap gap-2">
-              {!isCameraActive ? (
-                <Button onClick={startCamera} variant="outline" className="flex-1">
-                  <Camera className="mr-2 h-4 w-4" />
-                  Start Camera
-                </Button>
-              ) : (
-                <Button onClick={stopCamera} variant="outline" className="flex-1">
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Stop Camera
-                </Button>
-              )}
+            <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
               
-              {isCameraActive && (
-                <>
-                  <Button 
-                    onClick={async () => {
-                      const captured = captureFromCamera();
-                      if (captured) {
-                        setImage(captured);
-                        setImagePreview(captured);
-                        setResults(null);
-                        setError(null);
-                        await processImageWithBase64(captured);
-                      }
-                    }} 
-                    variant="default" 
-                    className="flex-1"
-                    disabled={processing}
-                  >
-                    <Camera className="mr-2 h-4 w-4" />
-                    Capture & Process
-                  </Button>
-                  <Button
-                    onClick={toggleAutoCapture}
-                    variant={autoCapture ? "destructive" : "secondary"}
-                    className="flex-1"
-                    disabled={processing}
-                  >
-                    {autoCapture ? "Stop Auto Capture" : "Auto Capture"}
-                  </Button>
-                </>
+              {/* Live Detection Overlay */}
+              {liveDetection && (
+                <div className="absolute top-4 left-0 right-0 flex justify-center">
+                  <div className={`px-4 py-3 rounded-lg ${
+                    liveDetection.confidence >= 0.5 
+                      ? 'bg-green-600/90' 
+                      : 'bg-blue-600/90'
+                  }`}>
+                    <div className="text-white text-center">
+                      <div className="text-xl font-bold font-mono">
+                        {liveDetection.registration}
+                      </div>
+                      <div className="text-xs opacity-90">
+                        {Math.round(liveDetection.confidence * 100)}% confidence
+                      </div>
+                      {autoCapture && liveDetection.confidence >= 0.5 && (
+                        <div className="text-xs mt-1 font-semibold">
+                          ✓ Auto-capturing...
+                        </div>
+                      )}
+                      {autoCapture && liveDetection.confidence < 0.5 && (
+                        <div className="text-xs mt-1 opacity-80">
+                          Need {Math.round((0.5 - liveDetection.confidence) * 100)}% more confidence
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
-              
-              <Button onClick={handleImageUpload} variant="outline" className="flex-1">
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Image
-              </Button>
+
+              {/* Processing Indicator */}
+              {processing && (
+                <div className="absolute top-20 left-0 right-0 flex justify-center items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <span className="text-white text-sm font-medium">Scanning...</span>
+                </div>
+              )}
+
+              {/* Controls Overlay */}
+              <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-4 flex items-center justify-around">
+                <Button
+                  onClick={() => setAutoCapture(!autoCapture)}
+                  variant={autoCapture ? "default" : "outline"}
+                  className={autoCapture ? "bg-green-600 hover:bg-green-700" : ""}
+                  disabled={processing}
+                >
+                  {autoCapture ? "Auto ON" : "Auto OFF"}
+                </Button>
+
+                <Button
+                  onClick={handleManualCapture}
+                  className="w-16 h-16 rounded-full bg-white hover:bg-gray-200 p-0"
+                  disabled={processing}
+                >
+                  <div className="w-12 h-12 rounded-full bg-gray-800" />
+                </Button>
+
+                <Button
+                  onClick={handlePickFromGallery}
+                  variant="outline"
+                  className="bg-white/20 hover:bg-white/30"
+                  disabled={processing}
+                >
+                  <Upload className="h-5 w-5 text-white" />
+                </Button>
+              </div>
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-
-            {image && !isCameraActive && (
-              <Button
-                onClick={processImage}
-                disabled={processing}
-                className="w-full"
-                size="lg"
-              >
-                {processing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  'Process Image'
-                )}
-              </Button>
+            {!processing && autoCapture && (
+              <div className="text-center text-sm text-muted-foreground">
+                {liveDetection 
+                  ? `Detected: ${liveDetection.registration} (${Math.round(liveDetection.confidence * 100)}%)`
+                  : "Point camera at license plate..."}
+              </div>
             )}
           </CardContent>
         </Card>
+      )}
 
-        {/* Results Section */}
+      {/* Start Camera Button */}
+      {mode === "preview" && !isCameraActive && (
         <Card>
           <CardHeader>
-            <CardTitle>Detection Results</CardTitle>
+            <CardTitle>Camera Input</CardTitle>
             <CardDescription>
-              {results ? `${results.count} plate(s) detected` : 'No results yet'}
+              Start camera to begin scanning
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            {results?.annotated_image && (
-              <div className="relative w-full aspect-video bg-slate-100 rounded-lg overflow-hidden">
-                <img
-                  src={results.annotated_image}
-                  alt="Annotated result"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            )}
-
-            {results?.plates && results.plates.length > 0 && (
-              <div className="space-y-3">
-                {results.plates.map((plate, index) => (
-                  <Card key={index} className={plate.in_database ? 'border-green-500' : 'border-yellow-500'}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-xl font-bold">{plate.text}</h3>
-                            {plate.in_database ? (
-                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
-                                In Database
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">
-                                Not Found
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div className="space-y-1 text-sm text-muted-foreground">
-                            <p>Confidence: {(plate.confidence * 100).toFixed(1)}%</p>
-                            <p>Detection: {(plate.detection_confidence * 100).toFixed(1)}%</p>
-                          </div>
-
-                          {plate.vehicle_info && (
-                            <div className="mt-3 p-3 bg-green-50 rounded-lg">
-                              <p className="font-semibold text-sm mb-1">Vehicle Information:</p>
-                              <div className="text-sm space-y-1">
-                                {plate.vehicle_info.registration_plate && (
-                                  <p>Plate: {plate.vehicle_info.registration_plate}</p>
-                                )}
-                                {plate.vehicle_info.permit_number && (
-                                  <p>Permit: {plate.vehicle_info.permit_number}</p>
-                                )}
-                                {plate.vehicle_info.parking_type && (
-                                  <p>Type: {plate.vehicle_info.parking_type}</p>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Log Vehicle Button */}
-                          <div className="mt-4">
-                            <Button
-                              onClick={() => logVehicle(plate, index)}
-                              disabled={logging[index]}
-                              variant="default"
-                              className="w-full"
-                              size="sm"
-                            >
-                              {logging[index] ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Logging...
-                                </>
-                              ) : (
-                                <>
-                                  <FileText className="mr-2 h-4 w-4" />
-                                  Log Vehicle
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {!results && !error && !processing && (
-              <div className="text-center py-8 text-muted-foreground">
-                <Camera className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No results yet. Upload or capture an image to get started.</p>
-              </div>
-            )}
+            <Button onClick={startCamera} className="w-full" size="lg">
+              <Camera className="mr-2 h-5 w-5" />
+              Start Camera
+            </Button>
+            <Button onClick={handlePickFromGallery} variant="outline" className="w-full">
+              <Upload className="mr-2 h-5 w-5" />
+              Choose from Gallery
+            </Button>
           </CardContent>
         </Card>
-      </div>
+      )}
+
+      {/* Manual Capture Mode - Show Image */}
+      {mode === "manual" && capturedImage && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Captured Image</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative w-full aspect-video bg-slate-100 rounded-lg overflow-hidden">
+                <img
+                  src={capturedImage}
+                  alt="Captured"
+                  className="w-full h-full object-contain"
+                />
+                {processing && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center gap-3">
+                    <Loader2 className="h-6 w-6 animate-spin text-white" />
+                    <span className="text-white font-medium">Processing image...</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Detection Result</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!processing && detection ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-green-50 border-2 border-green-500 rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Detected Registration:
+                    </div>
+                    <div className="text-2xl font-bold font-mono mb-2">
+                      {detection.registration}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Confidence: {Math.round(detection.confidence * 100)}%
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleUseRegistration}
+                    className="w-full"
+                    size="lg"
+                  >
+                    <FileText className="mr-2 h-5 w-5" />
+                    Use This Registration
+                  </Button>
+                </div>
+              ) : !processing ? (
+                <div className="p-4 bg-yellow-50 border-2 border-yellow-500 rounded-lg text-center">
+                  <AlertCircle className="h-6 w-6 text-yellow-600 mx-auto mb-2" />
+                  <div className="font-semibold text-yellow-900 mb-1">
+                    No license plate detected
+                  </div>
+                  <div className="text-sm text-yellow-700">
+                    Try again with a clearer image of the license plate
+                  </div>
+                </div>
+              ) : null}
+
+              <Button
+                onClick={handleClear}
+                variant="outline"
+                className="w-full"
+              >
+                Clear & Retry
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Logging Modal */}
+      <Dialog open={showLogging} onOpenChange={setShowLogging}>
+        <DialogContent>
+          {loggingSuccess ? (
+            <div className="flex flex-col items-center py-6 gap-4">
+              <CheckCircle2 className="h-12 w-12 text-green-500" />
+              <DialogTitle className="text-xl text-green-600">
+                Vehicle Logged Successfully!
+              </DialogTitle>
+            </div>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Log Vehicle</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-100 rounded-lg text-center">
+                  <div className="text-2xl font-bold font-mono">
+                    {detection?.registration || liveDetection?.registration}
+                  </div>
+                </div>
+
+                {matchedVehicle ? (
+                  <div className="p-4 bg-green-50 rounded-lg space-y-2">
+                    <div className="font-semibold text-sm text-slate-600 mb-2">
+                      Vehicle Found:
+                    </div>
+                    <div className="text-sm text-slate-700">
+                      Permit: {matchedVehicle.permit_number || "N/A"}
+                    </div>
+                    <div className="text-sm text-slate-700">
+                      Type: {matchedVehicle.parking_type || "N/A"}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-red-50 rounded-lg text-center">
+                    <div className="font-semibold text-red-600 mb-1">
+                      Unregistered Vehicle
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      This vehicle is not in the system
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleLogVehicle}
+                  disabled={logging}
+                  className="w-full"
+                  size="lg"
+                >
+                  {logging ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Logging...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="mr-2 h-5 w-5" />
+                      Log Vehicle
+                    </>
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
     </div>
   );
 }
-
