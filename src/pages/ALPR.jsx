@@ -65,7 +65,8 @@ export default function ALPR() {
 
   // Handle video stream attachment
   useEffect(() => {
-    if (stream && videoRef.current) {
+    if (stream && videoRef.current && isCameraActive) {
+      console.log('[ALPR] Attaching stream to video element');
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(err => {
         console.error('Video play error:', err);
@@ -73,7 +74,7 @@ export default function ALPR() {
     } else if (!stream && videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  }, [stream]);
+  }, [stream, isCameraActive]);
 
   // Handle auto-capture mode
   useEffect(() => {
@@ -594,17 +595,16 @@ export default function ALPR() {
         <>
           <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
             {/* Camera Video - Always render */}
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            
-            {/* Placeholder overlay when camera not active */}
-            {!isCameraActive && (
-              <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-900 z-0">
+            {isCameraActive ? (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-900">
                 <Camera className="h-16 w-16 text-slate-400" />
                 <div className="text-white text-center">
                   <p className="text-lg font-semibold mb-2">Camera Not Started</p>
