@@ -526,125 +526,133 @@ export default function ALPR() {
         </Alert>
       )}
 
-      {/* Camera Preview Mode */}
-      {mode === "preview" && isCameraActive && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Camera Preview</CardTitle>
-            <CardDescription>
-              {autoCapture 
-                ? `Auto-capture: Scanning every 2s... Will capture when plate detected (≥50% confidence)${processing ? " [Processing...]" : ""}`
-                : "Manual mode - Tap capture button to take photo"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
+      {/* Camera Preview Mode - Always show camera area like mobile app */}
+      {mode === "preview" && (
+        <>
+          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
+            {/* Camera Video or Placeholder */}
+            {isCameraActive ? (
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 className="w-full h-full object-cover"
               />
-              
-              {/* Live Detection Overlay */}
-              {liveDetection && (
-                <div className="absolute top-4 left-0 right-0 flex justify-center">
-                  <div className={`px-4 py-3 rounded-lg ${
-                    liveDetection.confidence >= 0.5 
-                      ? 'bg-green-600/90' 
-                      : 'bg-blue-600/90'
-                  }`}>
-                    <div className="text-white text-center">
-                      <div className="text-xl font-bold font-mono">
-                        {liveDetection.registration}
-                      </div>
-                      <div className="text-xs opacity-90">
-                        {Math.round(liveDetection.confidence * 100)}% confidence
-                      </div>
-                      {autoCapture && liveDetection.confidence >= 0.5 && (
-                        <div className="text-xs mt-1 font-semibold">
-                          ✓ Auto-capturing...
-                        </div>
-                      )}
-                      {autoCapture && liveDetection.confidence < 0.5 && (
-                        <div className="text-xs mt-1 opacity-80">
-                          Need {Math.round((0.5 - liveDetection.confidence) * 100)}% more confidence
-                        </div>
-                      )}
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-900">
+                <Camera className="h-16 w-16 text-slate-400" />
+                <div className="text-white text-center">
+                  <p className="text-lg font-semibold mb-2">Camera Not Started</p>
+                  <p className="text-sm text-slate-400">Tap the camera button below to start</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Live Detection Overlay */}
+            {liveDetection && isCameraActive && (
+              <div className="absolute top-4 left-0 right-0 flex justify-center z-10">
+                <div className={`px-4 py-3 rounded-lg ${
+                  liveDetection.confidence >= 0.5 
+                    ? 'bg-green-600/90' 
+                    : 'bg-blue-600/90'
+                }`}>
+                  <div className="text-white text-center">
+                    <div className="text-xl font-bold font-mono">
+                      {liveDetection.registration}
                     </div>
+                    <div className="text-xs opacity-90">
+                      {Math.round(liveDetection.confidence * 100)}% confidence
+                    </div>
+                    {autoCapture && liveDetection.confidence >= 0.5 && (
+                      <div className="text-xs mt-1 font-semibold">
+                        ✓ Auto-capturing...
+                      </div>
+                    )}
+                    {autoCapture && liveDetection.confidence < 0.5 && (
+                      <div className="text-xs mt-1 opacity-80">
+                        Need {Math.round((0.5 - liveDetection.confidence) * 100)}% more confidence
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-
-              {/* Processing Indicator */}
-              {processing && (
-                <div className="absolute top-20 left-0 right-0 flex justify-center items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-white" />
-                  <span className="text-white text-sm font-medium">Scanning...</span>
-                </div>
-              )}
-
-              {/* Controls Overlay */}
-              <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-4 flex items-center justify-around">
-                <Button
-                  onClick={() => setAutoCapture(!autoCapture)}
-                  variant={autoCapture ? "default" : "outline"}
-                  className={autoCapture ? "bg-green-600 hover:bg-green-700" : ""}
-                  disabled={processing}
-                >
-                  {autoCapture ? "Auto ON" : "Auto OFF"}
-                </Button>
-
-                <Button
-                  onClick={handleManualCapture}
-                  className="w-16 h-16 rounded-full bg-white hover:bg-gray-200 p-0"
-                  disabled={processing}
-                >
-                  <div className="w-12 h-12 rounded-full bg-gray-800" />
-                </Button>
-
-                <Button
-                  onClick={handlePickFromGallery}
-                  variant="outline"
-                  className="bg-white/20 hover:bg-white/30"
-                  disabled={processing}
-                >
-                  <Upload className="h-5 w-5 text-white" />
-                </Button>
               </div>
-            </div>
+            )}
 
-            {!processing && autoCapture && (
-              <div className="text-center text-sm text-muted-foreground">
+            {/* Processing Indicator */}
+            {processing && isCameraActive && (
+              <div className="absolute top-20 left-0 right-0 flex justify-center items-center gap-2 z-10">
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                <span className="text-white text-sm font-medium">Scanning...</span>
+              </div>
+            )}
+
+            {/* Controls Overlay - Always visible */}
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-4 flex items-center justify-around z-10">
+              <Button
+                onClick={() => {
+                  if (!isCameraActive) {
+                    startCamera();
+                  } else {
+                    setAutoCapture(!autoCapture);
+                  }
+                }}
+                variant={autoCapture && isCameraActive ? "default" : "outline"}
+                className={autoCapture && isCameraActive ? "bg-green-600 hover:bg-green-700 text-white" : "bg-white/20 hover:bg-white/30 text-white border-white/30"}
+                disabled={processing || !isCameraActive}
+                size="sm"
+              >
+                {!isCameraActive ? (
+                  <>
+                    <Camera className="h-4 w-4 mr-1" />
+                    Start
+                  </>
+                ) : autoCapture ? (
+                  "Auto ON"
+                ) : (
+                  "Auto OFF"
+                )}
+              </Button>
+
+              <Button
+                onClick={isCameraActive ? handleManualCapture : startCamera}
+                className="w-16 h-16 rounded-full bg-white hover:bg-gray-200 p-0 border-4 border-white"
+                disabled={processing}
+              >
+                <div className="w-12 h-12 rounded-full bg-gray-800" />
+              </Button>
+
+              <Button
+                onClick={handlePickFromGallery}
+                variant="outline"
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                disabled={processing}
+                size="sm"
+              >
+                <Upload className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Mode Toggle Info */}
+          <div className="bg-slate-50 p-3 rounded-lg mb-4">
+            <div className="text-center text-sm text-slate-600">
+              {!isCameraActive ? (
+                "Start camera to begin scanning"
+              ) : autoCapture ? (
+                `Auto-capture: Scanning every 2s... Will capture when plate detected (≥50% confidence)${processing ? " [Processing...]" : ""}`
+              ) : (
+                "Manual mode - Tap capture button to take photo"
+              )}
+            </div>
+            {!processing && autoCapture && isCameraActive && (
+              <div className="text-center text-xs text-slate-500 mt-2 italic">
                 {liveDetection 
                   ? `Detected: ${liveDetection.registration} (${Math.round(liveDetection.confidence * 100)}%)`
                   : "Point camera at license plate..."}
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Start Camera Button */}
-      {mode === "preview" && !isCameraActive && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Camera Input</CardTitle>
-            <CardDescription>
-              Start camera to begin scanning
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button onClick={startCamera} className="w-full" size="lg">
-              <Camera className="mr-2 h-5 w-5" />
-              Start Camera
-            </Button>
-            <Button onClick={handlePickFromGallery} variant="outline" className="w-full">
-              <Upload className="mr-2 h-5 w-5" />
-              Choose from Gallery
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </>
       )}
 
       {/* Manual Capture Mode - Show Image */}
