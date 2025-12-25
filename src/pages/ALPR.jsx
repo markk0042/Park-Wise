@@ -190,18 +190,39 @@ export default function ALPR() {
       }
     } catch (error) {
       const errorMessage = error?.message || "";
+      const errorStatus = error?.response?.status || error?.status;
       
-      // Handle errors gracefully
-      if (errorMessage.includes("500") || errorMessage.includes("PIL") || errorMessage.includes("ANTIALIAS")) {
+      // Handle authentication errors
+      if (errorStatus === 401 || errorStatus === 403 || errorMessage.includes("401") || errorMessage.includes("403") || errorMessage.includes("Unauthorized") || errorMessage.includes("Forbidden")) {
+        console.error("[ALPR] Authentication error:", errorMessage);
+        setError("Authentication failed. Please log out and log back in.");
+        stopAutoCapture();
+        setServiceHealth(false);
+        setLiveDetection(null);
+        toast({
+          title: "Authentication Error",
+          description: "Your session has expired. Please log out and log back in.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+      // Handle server errors
+      else if (errorStatus === 500 || errorMessage.includes("500") || errorMessage.includes("PIL") || errorMessage.includes("ANTIALIAS")) {
         setServiceHealth(false);
         setLiveDetection(null);
         stopAutoCapture();
         console.error("[ALPR] Backend error detected:", errorMessage);
-      } else if (errorMessage.includes("ALPR service") || errorMessage.includes("Failed to connect")) {
+        setError("ALPR service error. Please try again later.");
+      } 
+      // Handle connection errors
+      else if (errorMessage.includes("ALPR service") || errorMessage.includes("Failed to connect") || errorMessage.includes("Network")) {
         setServiceHealth(false);
         stopAutoCapture();
         console.error("[ALPR] Connection error:", errorMessage);
-      } else {
+        setError("Cannot connect to ALPR service. Please check your connection.");
+      } 
+      // Handle other errors silently during scanning (don't stop auto-capture for transient errors)
+      else {
         console.warn("[ALPR] Transient error during scan, continuing:", errorMessage);
       }
     } finally {
@@ -327,11 +348,33 @@ export default function ALPR() {
       }
     } catch (err) {
       const errorMessage = err?.message || "";
+      const errorStatus = err?.response?.status || err?.status;
       const isNormalFailure = 
         errorMessage.includes("No license plate") || 
         errorMessage.includes("No detection");
       
-      if (!isNormalFailure) {
+      // Handle authentication errors
+      if (errorStatus === 401 || errorStatus === 403 || errorMessage.includes("401") || errorMessage.includes("403") || errorMessage.includes("Unauthorized") || errorMessage.includes("Forbidden")) {
+        setError("Authentication failed. Please log out and log back in.");
+        toast({
+          title: "Authentication Error",
+          description: "Your session has expired. Please log out and log back in.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+      // Handle server errors
+      else if (errorStatus === 500 || errorMessage.includes("500")) {
+        setError("ALPR service error. Please try again later.");
+        toast({
+          title: "Server Error",
+          description: "The ALPR service encountered an error. Please try again.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+      // Only show error for non-normal failures
+      else if (!isNormalFailure) {
         setError(err.message || 'Failed to process image');
         console.error('ALPR processing error:', err);
       }
