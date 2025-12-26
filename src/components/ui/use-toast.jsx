@@ -3,6 +3,7 @@ import { useState, useEffect, createContext, useContext } from "react";
 
 const TOAST_LIMIT = 20;
 const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_QUICK_REMOVE_DELAY = 100; // Fast removal for auto-dismissed toasts
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -20,18 +21,20 @@ function genId() {
 
 const toastTimeouts = new Map();
 
-const addToRemoveQueue = (toastId) => {
+const addToRemoveQueue = (toastId, quickRemove = false) => {
   if (toastTimeouts.has(toastId)) {
-    return;
+    clearTimeout(toastTimeouts.get(toastId));
+    toastTimeouts.delete(toastId);
   }
 
+  const delay = quickRemove ? TOAST_QUICK_REMOVE_DELAY : TOAST_REMOVE_DELAY;
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId);
     dispatch({
       type: actionTypes.REMOVE_TOAST,
       toastId,
     });
-  }, TOAST_REMOVE_DELAY);
+  }, delay);
 
   toastTimeouts.set(toastId, timeout);
 };
@@ -61,15 +64,15 @@ export const reducer = (state, action) => {
       };
 
     case actionTypes.DISMISS_TOAST: {
-      const { toastId } = action;
+      const { toastId, quickRemove } = action;
 
       // ! Side effects ! - This could be extracted into a dismissToast() action,
       // but I'll keep it here for simplicity
       if (toastId) {
-        addToRemoveQueue(toastId);
+        addToRemoveQueue(toastId, quickRemove);
       } else {
         state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id);
+          addToRemoveQueue(toast.id, quickRemove);
         });
       }
 
@@ -119,8 +122,8 @@ function toast({ duration, ...props }) {
       toast: { ...props, id },
     });
 
-  const dismiss = () =>
-    dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
+  const dismiss = (quick = false) =>
+    dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id, quickRemove: quick });
 
   dispatch({
     type: actionTypes.ADD_TOAST,

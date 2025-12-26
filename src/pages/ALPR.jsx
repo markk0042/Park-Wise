@@ -488,14 +488,12 @@ export default function ALPR() {
         description: `Plate ${regToUse} has been logged.`,
       });
       
-      // Auto-dismiss toast after 3 seconds
+      // Auto-dismiss toast after 3 seconds - use quick remove
       setTimeout(() => {
-        if (successToast?.update) {
-          successToast.update({ open: false });
+        if (successToast?.dismiss) {
+          successToast.dismiss(true); // true = quick remove
         } else if (successToast?.id) {
           dismiss(successToast.id);
-        } else if (successToast?.dismiss) {
-          successToast.dismiss();
         }
       }, 3000);
 
@@ -511,14 +509,12 @@ export default function ALPR() {
         variant: 'destructive',
       });
       
-      // Auto-dismiss toast after 3 seconds
+      // Auto-dismiss toast after 3 seconds - use quick remove
       setTimeout(() => {
-        if (errorToast?.update) {
-          errorToast.update({ open: false });
+        if (errorToast?.dismiss) {
+          errorToast.dismiss(true); // true = quick remove
         } else if (errorToast?.id) {
           dismiss(errorToast.id);
-        } else if (errorToast?.dismiss) {
-          errorToast.dismiss();
         }
       }, 3000);
     } finally {
@@ -697,48 +693,73 @@ export default function ALPR() {
 
             {/* Minimal Controls Overlay - Bottom, compact */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/60 to-transparent p-3 flex items-center justify-around z-20">
-              <Button
-                onClick={() => {
-                  if (!isCameraActive) {
-                    startCamera();
-                  } else {
-                    setAutoCapture(!autoCapture);
-                  }
-                }}
-                variant={autoCapture && isCameraActive ? "default" : "outline"}
-                className={autoCapture && isCameraActive ? "bg-green-600 hover:bg-green-700 text-white border-0" : "bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"}
-                disabled={processing}
-                size="sm"
-              >
-                {!isCameraActive ? (
-                  <>
+              {isCameraActive ? (
+                <>
+                  <Button
+                    onClick={() => setAutoCapture(!autoCapture)}
+                    variant={autoCapture ? "default" : "outline"}
+                    className={autoCapture ? "bg-green-600 hover:bg-green-700 text-white border-0" : "bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"}
+                    disabled={processing}
+                    size="sm"
+                  >
+                    {autoCapture ? (
+                      <span className="text-xs">Auto ON</span>
+                    ) : (
+                      <span className="text-xs">Auto OFF</span>
+                    )}
+                  </Button>
+
+                  <Button
+                    onClick={handleManualCapture}
+                    className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
+                    disabled={processing}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gray-800" />
+                  </Button>
+
+                  <Button
+                    onClick={stopCamera}
+                    variant="outline"
+                    className="bg-red-500/80 hover:bg-red-600/90 text-white border-red-400/50 backdrop-blur-sm"
+                    disabled={processing}
+                    size="sm"
+                  >
+                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                    <span className="text-xs">Stop</span>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={startCamera}
+                    variant="outline"
+                    className="bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"
+                    disabled={processing}
+                    size="sm"
+                  >
                     <Camera className="h-3.5 w-3.5 mr-1" />
                     <span className="text-xs">Start</span>
-                  </>
-                ) : autoCapture ? (
-                  <span className="text-xs">Auto ON</span>
-                ) : (
-                  <span className="text-xs">Auto OFF</span>
-                )}
-              </Button>
+                  </Button>
 
-              <Button
-                onClick={isCameraActive ? handleManualCapture : startCamera}
-                className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
-                disabled={processing}
-              >
-                <div className="w-10 h-10 rounded-full bg-gray-800" />
-              </Button>
+                  <Button
+                    onClick={startCamera}
+                    className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
+                    disabled={processing}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gray-800" />
+                  </Button>
 
-              <Button
-                onClick={handlePickFromGallery}
-                variant="outline"
-                className="bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"
-                disabled={processing}
-                size="sm"
-              >
-                <Upload className="h-3.5 w-3.5" />
-              </Button>
+                  <Button
+                    onClick={handlePickFromGallery}
+                    variant="outline"
+                    className="bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"
+                    disabled={processing}
+                    size="sm"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
