@@ -90,9 +90,14 @@ export default function ALPR() {
 
   const checkServiceHealth = async () => {
     try {
+      console.log('[ALPR] Checking service health...');
       const result = await checkALPRHealth();
-      setServiceHealth(result.service_available);
-    } catch {
+      console.log('[ALPR] Health check result:', result);
+      const isAvailable = result?.service_available === true;
+      console.log('[ALPR] Service available:', isAvailable);
+      setServiceHealth(isAvailable);
+    } catch (error) {
+      console.error('[ALPR] Health check error:', error);
       setServiceHealth(false);
     } finally {
       setServiceChecked(true);
