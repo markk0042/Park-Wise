@@ -64,17 +64,43 @@ export const processALPRImage = async (imageBase64) => {
       response: error.response?.data,
       status: error.response?.status,
       url: `${ALPR_SERVICE_URL}/process`,
+      stack: error.stack,
     });
     
-    if (error.code === 'ECONNABORTED' || error.message?.includes('aborted')) {
-      throw new Error('ALPR service request timed out. The service may be waking up from sleep. Please try again in a few seconds.');
-    } else if (error.response) {
-      const errorData = error.response.data;
-      const errorMessage = errorData?.error || errorData?.message || 'ALPR processing failed';
-      throw new Error(errorMessage);
-    } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+    // Handle timeout/aborted requests (likely service sleeping)
+    if (error.code === 'ECONNABORTED' || error.message?.includes('aborted') || error.code === 'ETIMEDOUT') {
+      throw new Error('ALPR service request timed out. The service may be waking up from sleep (this can take 30-60 seconds on free tier). Please try again.');
+    } 
+    // Handle connection refused (service not running)
+    else if (error.code === 'ECONNREFUSED') {
       throw new Error('ALPR service is not available. Please ensure the service is running.');
-    } else {
+    }
+    // Handle HTTP errors from ALPR service
+    else if (error.response) {
+      const errorData = error.response.data;
+      const status = error.response.status;
+      
+      // 503 Service Unavailable - service is likely sleeping
+      if (status === 503) {
+        throw new Error('ALPR service is temporarily unavailable (may be waking up). Please try again in 30-60 seconds.');
+      }
+      // 500 Internal Server Error from ALPR service
+      else if (status === 500) {
+        const errorMessage = errorData?.error || errorData?.message || 'ALPR service encountered an internal error';
+        throw new Error(`ALPR service error: ${errorMessage}`);
+      }
+      // Other HTTP errors
+      else {
+        const errorMessage = errorData?.error || errorData?.message || `ALPR service returned error ${status}`;
+        throw new Error(errorMessage);
+      }
+    } 
+    // Handle network errors
+    else if (error.code === 'ENOTFOUND' || error.code === 'ECONNRESET') {
+      throw new Error('Failed to connect to ALPR service. Please check if the service is running.');
+    }
+    // Generic error
+    else {
       throw new Error(error.message || 'ALPR processing failed');
     }
   }

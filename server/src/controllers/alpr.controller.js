@@ -21,8 +21,21 @@ export const processALPR = async (req, res, next) => {
 
     res.json(result);
   } catch (error) {
-    console.error('ALPR processing error:', error);
-    res.status(500).json({
+    console.error('ALPR processing error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    });
+    
+    // Determine appropriate status code based on error type
+    let statusCode = 500;
+    if (error.message?.includes('timeout') || error.message?.includes('waking up')) {
+      statusCode = 503; // Service Unavailable
+    } else if (error.message?.includes('not available') || error.message?.includes('not running')) {
+      statusCode = 503; // Service Unavailable
+    }
+    
+    res.status(statusCode).json({
       error: error.message || 'ALPR processing failed',
     });
   }

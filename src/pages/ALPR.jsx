@@ -213,12 +213,23 @@ export default function ALPR() {
         });
       }
       // Handle server errors
-      else if (errorStatus === 500 || errorMessage.includes("500") || errorMessage.includes("PIL") || errorMessage.includes("ANTIALIAS")) {
-        setServiceHealth(false);
+      else if (errorStatus === 500 || errorStatus === 503 || errorMessage.includes("500") || errorMessage.includes("503") || errorMessage.includes("PIL") || errorMessage.includes("ANTIALIAS")) {
+        // Don't set serviceHealth to false for timeout/wake-up errors
+        if (errorMessage.includes("timeout") || errorMessage.includes("waking up") || errorStatus === 503) {
+          setError("ALPR service is waking up (this can take 30-60 seconds). Please wait and try again.");
+          toast({
+            title: "Service Waking Up",
+            description: "The ALPR service is starting. Please wait 30-60 seconds and try again.",
+            variant: "default",
+            duration: 5000,
+          });
+        } else {
+          setServiceHealth(false);
+          setError("ALPR service error. Please try again later.");
+        }
         setLiveDetection(null);
         stopAutoCapture();
         console.error("[ALPR] Backend error detected:", errorMessage);
-        setError("ALPR service error. Please try again later.");
       } 
       // Handle connection errors
       else if (errorMessage.includes("ALPR service") || errorMessage.includes("Failed to connect") || errorMessage.includes("Network")) {
@@ -370,14 +381,24 @@ export default function ALPR() {
         });
       }
       // Handle server errors
-      else if (errorStatus === 500 || errorMessage.includes("500")) {
-        setError("ALPR service error. Please try again later.");
-        toast({
-          title: "Server Error",
-          description: "The ALPR service encountered an error. Please try again.",
-          variant: "destructive",
-          duration: 5000,
-        });
+      else if (errorStatus === 500 || errorStatus === 503 || errorMessage.includes("500") || errorMessage.includes("503")) {
+        if (errorMessage.includes("timeout") || errorMessage.includes("waking up") || errorStatus === 503) {
+          setError("ALPR service is waking up (this can take 30-60 seconds). Please wait and try again.");
+          toast({
+            title: "Service Waking Up",
+            description: "The ALPR service is starting. Please wait 30-60 seconds and try again.",
+            variant: "default",
+            duration: 5000,
+          });
+        } else {
+          setError("ALPR service error. Please try again later.");
+          toast({
+            title: "Server Error",
+            description: errorMessage || "The ALPR service encountered an error. Please try again.",
+            variant: "destructive",
+            duration: 5000,
+          });
+        }
       }
       // Only show error for non-normal failures
       else if (!isNormalFailure) {
