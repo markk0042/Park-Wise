@@ -91,18 +91,41 @@ export default function ALPR() {
     };
   }, [mode, autoCapture, isCameraActive]);
 
-  const checkServiceHealth = async () => {
+  const checkServiceHealth = async (retryCount = 0) => {
+    const maxRetries = 2; // Try up to 3 times total (initial + 2 retries)
+    
     try {
-      console.log('[ALPR] Checking service health...');
+      console.log(`[ALPR] Checking service health... (attempt ${retryCount + 1}/${maxRetries + 1})`);
       const result = await checkALPRHealth();
       console.log('[ALPR] Health check result:', result);
       const isAvailable = result?.service_available === true;
       console.log('[ALPR] Service available:', isAvailable);
       setServiceHealth(isAvailable);
+      setServiceChecked(true);
     } catch (error) {
-      console.error('[ALPR] Health check error:', error);
+      console.error(`[ALPR] Health check error (attempt ${retryCount + 1}):`, error);
+      
+      // Retry if we haven't exceeded max retries and error suggests service might be sleeping
+      if (retryCount < maxRetries) {
+        const errorMessage = error?.message || '';
+        const isRetryableError = 
+          errorMessage.includes('timeout') || 
+          errorMessage.includes('unavailable') ||
+          error?.status === 503 ||
+          error?.status === 502;
+        
+        if (isRetryableError) {
+          console.log(`[ALPR] Retrying health check in ${(retryCount + 1) * 5} seconds...`);
+          // Wait progressively longer: 5s, 10s
+          setTimeout(() => {
+            checkServiceHealth(retryCount + 1);
+          }, (retryCount + 1) * 5000);
+          return; // Don't set serviceChecked yet, we're retrying
+        }
+      }
+      
+      // If we've exhausted retries or it's not a retryable error, mark as unavailable
       setServiceHealth(false);
-    } finally {
       setServiceChecked(true);
     }
   };

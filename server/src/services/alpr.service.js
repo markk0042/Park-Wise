@@ -193,13 +193,16 @@ export const checkALPRServiceHealth = async () => {
     console.log(`[ALPR Health] Checking service at: ${healthUrl}`);
     console.log(`[ALPR Health] ALPR_SERVICE_URL env var: ${ALPR_SERVICE_URL}`);
     
+    // Increased timeout to 30 seconds for Render free tier cold starts
+    // Health checks need to be more patient than processing requests
     const response = await axios.get(healthUrl, {
-      timeout: 10000, // Increased timeout to 10 seconds for Render's cold starts
+      timeout: 30000, // 30 seconds - enough time for service to wake up
     });
     
     console.log(`[ALPR Health] Response status: ${response.status}`);
     console.log(`[ALPR Health] Response data:`, JSON.stringify(response.data));
     
+    // Check if service is healthy - both status and initialization must be ok
     const isHealthy = response.data.status === 'ok' && response.data.alpr_initialized === true;
     console.log(`[ALPR Health] Service healthy: ${isHealthy}`);
     
@@ -212,6 +215,13 @@ export const checkALPRServiceHealth = async () => {
       status: error.response?.status,
       url: `${ALPR_SERVICE_URL}/api/health`,
     });
+    
+    // Don't fail health check on timeout - service might just be sleeping
+    // Return false but log that it's likely a temporary issue
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      console.log('[ALPR Health] Service timeout - likely sleeping, will retry on next check');
+    }
+    
     return false;
   }
 };
