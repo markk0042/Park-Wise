@@ -80,14 +80,22 @@ export const processALPRImage = async (imageBase64) => {
       const errorData = error.response.data;
       const status = error.response.status;
       
+      // 502 Bad Gateway - service is down/sleeping/not responding
+      if (status === 502) {
+        throw new Error('ALPR service is unavailable (service may be sleeping or restarting). Please wait 30-60 seconds and try again.');
+      }
       // 503 Service Unavailable - service is likely sleeping
-      if (status === 503) {
+      else if (status === 503) {
         throw new Error('ALPR service is temporarily unavailable (may be waking up). Please try again in 30-60 seconds.');
       }
       // 500 Internal Server Error from ALPR service
       else if (status === 500) {
         const errorMessage = errorData?.error || errorData?.message || 'ALPR service encountered an internal error';
         throw new Error(`ALPR service error: ${errorMessage}`);
+      }
+      // 504 Gateway Timeout - service took too long
+      else if (status === 504) {
+        throw new Error('ALPR service request timed out. The service may be waking up. Please try again in 30-60 seconds.');
       }
       // Other HTTP errors
       else {

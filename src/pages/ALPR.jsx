@@ -69,7 +69,10 @@ export default function ALPR() {
       console.log('[ALPR] Attaching stream to video element');
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(err => {
-        console.error('Video play error:', err);
+        // Ignore AbortError - this happens when video is stopped/cleared quickly
+        if (err.name !== 'AbortError') {
+          console.error('Video play error:', err);
+        }
       });
     } else if (!stream && videoRef.current) {
       videoRef.current.srcObject = null;
@@ -213,9 +216,9 @@ export default function ALPR() {
         });
       }
       // Handle server errors
-      else if (errorStatus === 500 || errorStatus === 503 || errorMessage.includes("500") || errorMessage.includes("503") || errorMessage.includes("PIL") || errorMessage.includes("ANTIALIAS")) {
+      else if (errorStatus === 500 || errorStatus === 502 || errorStatus === 503 || errorMessage.includes("500") || errorMessage.includes("502") || errorMessage.includes("503") || errorMessage.includes("PIL") || errorMessage.includes("ANTIALIAS")) {
         // Don't set serviceHealth to false for timeout/wake-up errors
-        if (errorMessage.includes("timeout") || errorMessage.includes("waking up") || errorStatus === 503) {
+        if (errorMessage.includes("timeout") || errorMessage.includes("waking up") || errorMessage.includes("sleeping") || errorMessage.includes("unavailable") || errorStatus === 502 || errorStatus === 503) {
           setError("ALPR service is waking up (this can take 30-60 seconds). Please wait and try again.");
           toast({
             title: "Service Waking Up",
@@ -381,8 +384,8 @@ export default function ALPR() {
         });
       }
       // Handle server errors
-      else if (errorStatus === 500 || errorStatus === 503 || errorMessage.includes("500") || errorMessage.includes("503")) {
-        if (errorMessage.includes("timeout") || errorMessage.includes("waking up") || errorStatus === 503) {
+      else if (errorStatus === 500 || errorStatus === 502 || errorStatus === 503 || errorMessage.includes("500") || errorMessage.includes("502") || errorMessage.includes("503")) {
+        if (errorMessage.includes("timeout") || errorMessage.includes("waking up") || errorMessage.includes("sleeping") || errorMessage.includes("unavailable") || errorStatus === 502 || errorStatus === 503) {
           setError("ALPR service is waking up (this can take 30-60 seconds). Please wait and try again.");
           toast({
             title: "Service Waking Up",
