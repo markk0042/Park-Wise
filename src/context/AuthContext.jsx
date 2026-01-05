@@ -32,6 +32,34 @@ export function AuthProvider({ children }) {
         }
         
         const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // Check for refresh token errors
+        if (error) {
+          const errorMessage = error?.message || '';
+          const isRefreshTokenError = errorMessage.includes('Invalid Refresh Token') || 
+                                     errorMessage.includes('Refresh Token Not Found') ||
+                                     errorMessage.includes('refresh_token_not_found');
+          
+          if (isRefreshTokenError) {
+            console.log('🔐 Invalid refresh token detected - clearing session');
+            // Clear any stale state on refresh token error
+            setToken(null);
+            setProfile(null);
+            setAuthToken(null);
+            await supabase.auth.signOut();
+            // Store session expiration reason for Login page to display
+            sessionStorage.setItem('session_expired', 'true');
+            setLoading(false);
+            return;
+          }
+          
+          console.error('Error loading session:', error);
+          // Clear any stale state on other errors
+          setToken(null);
+          setProfile(null);
+          setAuthToken(null);
+        }
+        
         if (session) {
           console.log('🔐 Found existing Supabase session');
           // Verify the session is still valid by checking if we can get user info
@@ -51,6 +79,17 @@ export function AuthProvider({ children }) {
             console.log('🔐 Session found, will verify with backend...');
           } catch (verifyError) {
             console.error('Error verifying session:', verifyError);
+            // Check for refresh token errors in verifyError too
+            const errorMessage = verifyError?.message || '';
+            const isRefreshTokenError = errorMessage.includes('Invalid Refresh Token') || 
+                                       errorMessage.includes('Refresh Token Not Found') ||
+                                       errorMessage.includes('refresh_token_not_found');
+            
+            if (isRefreshTokenError) {
+              console.log('🔐 Invalid refresh token during verification - clearing session');
+              sessionStorage.setItem('session_expired', 'true');
+            }
+            
             // If we can't verify, clear the session
             await supabase.auth.signOut();
             setToken(null);
@@ -66,15 +105,22 @@ export function AuthProvider({ children }) {
           setProfile(null);
           setAuthToken(null);
         }
-        if (error) {
-          console.error('Error loading session:', error);
-          // Clear any stale state on error
+      } catch (err) {
+        console.error('Error getting session:', err);
+        // Check for refresh token errors in the catch block too
+        const errorMessage = err?.message || '';
+        const isRefreshTokenError = errorMessage.includes('Invalid Refresh Token') || 
+                                   errorMessage.includes('Refresh Token Not Found') ||
+                                   errorMessage.includes('refresh_token_not_found');
+        
+        if (isRefreshTokenError) {
+          console.log('🔐 Invalid refresh token in catch block - clearing session');
           setToken(null);
           setProfile(null);
           setAuthToken(null);
+          await supabase.auth.signOut();
+          sessionStorage.setItem('session_expired', 'true');
         }
-      } catch (err) {
-        console.error('Error getting session:', err);
       } finally {
         if (!isResetPasswordPage) {
           setLoading(false);
@@ -86,18 +132,19 @@ export function AuthProvider({ children }) {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔐 Auth state changed:', event, 'Has session:', !!session);
-      
-      // CRITICAL: Don't auto-login if we're on the reset password page
-      // But allow the reset password page to handle its own session management
-      const currentPath = window.location.pathname;
-      if (currentPath === '/auth/reset-password') {
-        console.log('🔐 On reset password page - letting page handle session');
-        // Don't interfere with the reset password page's session management
-        // The page will handle signing out and setting sessions itself
-        // Ignore ALL events on reset password page - let the page component handle everything
-        return;
-      }
+      try {
+        console.log('🔐 Auth state changed:', event, 'Has session:', !!session);
+        
+        // CRITICAL: Don't auto-login if we're on the reset password page
+        // But allow the reset password page to handle its own session management
+        const currentPath = window.location.pathname;
+        if (currentPath === '/auth/reset-password') {
+          console.log('🔐 On reset password page - letting page handle session');
+          // Don't interfere with the reset password page's session management
+          // The page will handle signing out and setting sessions itself
+          // Ignore ALL events on reset password page - let the page component handle everything
+          return;
+        }
       
       // Also ignore SIGNED_IN events right after password reset (prevent auto-login)
       // Check if we just came from password reset by checking sessionStorage
@@ -159,6 +206,24 @@ export function AuthProvider({ children }) {
         setAuthToken(null);
       }
       setLoading(false);
+      } catch (err) {
+        console.error('Error in auth state change handler:', err);
+        // Check for refresh token errors
+        const errorMessage = err?.message || '';
+        const isRefreshTokenError = errorMessage.includes('Invalid Refresh Token') || 
+                                   errorMessage.includes('Refresh Token Not Found') ||
+                                   errorMessage.includes('refresh_token_not_found');
+        
+        if (isRefreshTokenError) {
+          console.log('🔐 Invalid refresh token in auth state change - clearing session');
+          setToken(null);
+          setProfile(null);
+          setAuthToken(null);
+          await supabase.auth.signOut();
+          sessionStorage.setItem('session_expired', 'true');
+        }
+        setLoading(false);
+      }
     });
 
     return () => {
