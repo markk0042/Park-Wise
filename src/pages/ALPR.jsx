@@ -92,7 +92,10 @@ export default function ALPR() {
   }, [mode, autoCapture, isCameraActive]);
 
   const checkServiceHealth = async (retryCount = 0) => {
-    const maxRetries = 2; // Try up to 3 times total (initial + 2 retries)
+    // Try up to 3 times total (initial + 2 retries)
+    // Render free tier services can take 30-60 seconds to wake up from sleep
+    // Backend timeout is 60s, so retries give additional time if needed
+    const maxRetries = 2;
     
     try {
       console.log(`[ALPR] Checking service health... (attempt ${retryCount + 1}/${maxRetries + 1})`);
@@ -115,11 +118,12 @@ export default function ALPR() {
           error?.status === 502;
         
         if (isRetryableError) {
-          console.log(`[ALPR] Retrying health check in ${(retryCount + 1) * 5} seconds...`);
-          // Wait progressively longer: 5s, 10s
+          // Wait progressively longer: 10s, 20s (gives service time to wake up)
+          const retryDelay = (retryCount + 1) * 10000; // 10s, 20s
+          console.log(`[ALPR] Retrying health check in ${retryDelay / 1000} seconds... (Render free tier can take 30-60s to wake up)`);
           setTimeout(() => {
             checkServiceHealth(retryCount + 1);
-          }, (retryCount + 1) * 5000);
+          }, retryDelay);
           return; // Don't set serviceChecked yet, we're retrying
         }
       }
@@ -640,28 +644,29 @@ export default function ALPR() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex flex-col items-center justify-center relative">
+      <div className="flex flex-col items-center justify-center">
         <div className="text-center">
           <h1 className="text-3xl font-bold">ALPR Scanner</h1>
           <p className="text-muted-foreground mt-1">
             Automatic License Plate Recognition
           </p>
+          {/* Service Status - Centered under subtitle */}
+          {serviceChecked && serviceHealth !== null && (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              {serviceHealth ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <span className="text-sm text-green-600">Service Online</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-5 w-5 text-red-500" />
+                  <span className="text-sm text-red-600">Service Offline</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
-        {serviceChecked && serviceHealth !== null && (
-          <div className="absolute top-0 right-0 flex items-center gap-2">
-            {serviceHealth ? (
-              <>
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <span className="text-sm text-green-600">Service Online</span>
-              </>
-            ) : (
-              <>
-                <XCircle className="h-5 w-5 text-red-500" />
-                <span className="text-sm text-red-600">Service Offline</span>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       {serviceChecked && !serviceHealth && (
@@ -742,77 +747,75 @@ export default function ALPR() {
                 <span className="text-white text-xs font-medium">Scanning...</span>
               </div>
             )}
+          </div>
 
-            {/* Minimal Controls Overlay - Bottom, compact */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/60 to-transparent p-3 flex items-center justify-around z-20">
-              {isCameraActive ? (
-                <>
-                  <Button
-                    onClick={() => setAutoCapture(!autoCapture)}
-                    variant={autoCapture ? "default" : "outline"}
-                    className={autoCapture ? "bg-green-600 hover:bg-green-700 text-white border-0" : "bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"}
-                    disabled={processing}
-                    size="sm"
-                  >
-                    {autoCapture ? (
-                      <span className="text-xs">Auto ON</span>
-                    ) : (
-                      <span className="text-xs">Auto OFF</span>
-                    )}
-                  </Button>
+          {/* Controls - Below image box for better mobile visibility */}
+          <div className="flex items-center justify-center gap-3 mt-4">
+            {isCameraActive ? (
+              <>
+                <Button
+                  onClick={() => setAutoCapture(!autoCapture)}
+                  variant={autoCapture ? "default" : "outline"}
+                  className={autoCapture ? "bg-green-600 hover:bg-green-700 text-white border-0" : ""}
+                  disabled={processing}
+                  size="sm"
+                >
+                  {autoCapture ? (
+                    <span className="text-xs">Auto ON</span>
+                  ) : (
+                    <span className="text-xs">Auto OFF</span>
+                  )}
+                </Button>
 
-                  <Button
-                    onClick={handleManualCapture}
-                    className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
-                    disabled={processing}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-gray-800" />
-                  </Button>
+                <Button
+                  onClick={handleManualCapture}
+                  className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
+                  disabled={processing}
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-800" />
+                </Button>
 
-                  <Button
-                    onClick={stopCamera}
-                    variant="outline"
-                    className="bg-red-500/80 hover:bg-red-600/90 text-white border-red-400/50 backdrop-blur-sm"
-                    disabled={processing}
-                    size="sm"
-                  >
-                    <XCircle className="h-3.5 w-3.5 mr-1" />
-                    <span className="text-xs">Stop</span>
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    onClick={startCamera}
-                    variant="outline"
-                    className="bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"
-                    disabled={processing}
-                    size="sm"
-                  >
-                    <Camera className="h-3.5 w-3.5 mr-1" />
-                    <span className="text-xs">Start</span>
-                  </Button>
+                <Button
+                  onClick={stopCamera}
+                  variant="destructive"
+                  className="bg-red-600 hover:bg-red-700 text-white border-0"
+                  disabled={processing}
+                  size="sm"
+                >
+                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                  <span className="text-xs">Stop</span>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  onClick={startCamera}
+                  variant="default"
+                  disabled={processing}
+                  size="sm"
+                >
+                  <Camera className="h-3.5 w-3.5 mr-1" />
+                  <span className="text-xs">Start</span>
+                </Button>
 
-                  <Button
-                    onClick={startCamera}
-                    className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
-                    disabled={processing}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-gray-800" />
-                  </Button>
+                <Button
+                  onClick={startCamera}
+                  className="w-14 h-14 rounded-full bg-white hover:bg-gray-100 p-0 border-2 border-gray-300 shadow-lg"
+                  disabled={processing}
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-800" />
+                </Button>
 
-                  <Button
-                    onClick={handlePickFromGallery}
-                    variant="outline"
-                    className="bg-white/25 hover:bg-white/35 text-white border-white/40 backdrop-blur-sm"
-                    disabled={processing}
-                    size="sm"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                  </Button>
-                </>
-              )}
-            </div>
+                <Button
+                  onClick={handlePickFromGallery}
+                  variant="outline"
+                  disabled={processing}
+                  size="sm"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mode Toggle Info */}

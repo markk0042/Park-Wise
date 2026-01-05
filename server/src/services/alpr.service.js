@@ -193,10 +193,11 @@ export const checkALPRServiceHealth = async () => {
     console.log(`[ALPR Health] Checking service at: ${healthUrl}`);
     console.log(`[ALPR Health] ALPR_SERVICE_URL env var: ${ALPR_SERVICE_URL}`);
     
-    // Increased timeout to 30 seconds for Render free tier cold starts
+    // Increased timeout to 60 seconds for Render free tier cold starts
+    // Render free tier services can take 30-60 seconds to wake up from sleep
     // Health checks need to be more patient than processing requests
     const response = await axios.get(healthUrl, {
-      timeout: 30000, // 30 seconds - enough time for service to wake up
+      timeout: 60000, // 60 seconds - enough time for Render free tier to wake up
     });
     
     console.log(`[ALPR Health] Response status: ${response.status}`);
