@@ -12,11 +12,19 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 
 // Get best detection from results (highest confidence)
+// Filters out very low confidence detections (< 0.2) to avoid false positives
+const MIN_CONFIDENCE_THRESHOLD = 0.2; // Minimum 20% confidence to show detection
 const getBestDetection = (detections) => {
   if (!detections || detections.length === 0) {
     return null;
   }
-  const sorted = [...detections].sort((a, b) => b.confidence - a.confidence);
+  // Filter out low confidence detections
+  const validDetections = detections.filter(d => d.confidence >= MIN_CONFIDENCE_THRESHOLD);
+  if (validDetections.length === 0) {
+    console.log(`[ALPR] All detections below ${MIN_CONFIDENCE_THRESHOLD} threshold:`, detections);
+    return null;
+  }
+  const sorted = [...validDetections].sort((a, b) => b.confidence - a.confidence);
   return sorted[0];
 };
 
@@ -107,8 +115,16 @@ export default function ALPR() {
       console.log(`[ALPR] Checking service health... (attempt ${retryCount + 1}/${maxRetries + 1})${isManualWakeUp ? ' [Manual Wake-Up]' : ''}`);
       const result = await checkALPRHealth();
       console.log('[ALPR] Health check result:', result);
-      const isAvailable = result?.service_available === true;
+      console.log('[ALPR] Result type:', typeof result);
+      console.log('[ALPR] Result keys:', result ? Object.keys(result) : 'null');
+      
+      // Handle both direct result and wrapped result formats
+      const isAvailable = result?.service_available === true || 
+                         (typeof result === 'object' && result !== null && 'service_available' in result && result.service_available === true);
+      
       console.log('[ALPR] Service available:', isAvailable);
+      console.log('[ALPR] service_available value:', result?.service_available);
+      
       setServiceHealth(isAvailable);
       setServiceChecked(true);
       
@@ -134,7 +150,9 @@ export default function ALPR() {
           errorMessage.includes('timeout') || 
           errorMessage.includes('unavailable') ||
           error?.status === 503 ||
-          error?.status === 502;
+          error?.status === 502 ||
+          error?.status === 408 || // Request Timeout
+          error?.isTimeout === true;
         
         if (isRetryableError) {
           // Wait progressively longer: 10s, 20s (gives service time to wake up)
@@ -151,12 +169,27 @@ export default function ALPR() {
       setServiceHealth(false);
       setServiceChecked(true);
       
+      // Log detailed error for debugging
+      console.error('[ALPR] Health check failed after retries:', {
+        error: error.message,
+        status: error.status,
+        isTimeout: error.isTimeout,
+        retryCount,
+        maxRetries,
+      });
+      
       // If this was a manual wake-up and it failed, show error
       if (isManualWakeUp) {
         setWakingUp(false);
+        const errorMsg = error.isTimeout 
+          ? "Health check timed out. The backend may be slow. Please try again in a moment."
+          : error.status === 500
+          ? "Backend error checking ALPR service. Please try again later."
+          : "Could not wake up the service. It may take longer than expected. You can still try scanning directly.";
+        
         toast({
           title: "Wake-Up Failed",
-          description: "Could not wake up the service. It may take longer than expected. You can still try scanning directly.",
+          description: errorMsg,
           variant: "destructive",
           duration: 5000,
         });
@@ -220,17 +253,28 @@ export default function ALPR() {
       }
 
       // Capture frame from video
+      // Optimize image size: max 1920px width to reduce processing time while maintaining quality
+      const maxWidth = 1920;
+      const videoWidth = videoRef.current.videoWidth;
+      const videoHeight = videoRef.current.videoHeight;
+      const scale = videoWidth > maxWidth ? maxWidth / videoWidth : 1;
+      
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      canvas.width = videoWidth * scale;
+      canvas.height = videoHeight * scale;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         setProcessing(false);
         return;
       }
       
-      ctx.drawImage(videoRef.current, 0, 0);
-      const imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+      // Use high-quality rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      
+      // Use high quality (0.9) for better ALPR detection
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
 
       console.log("[ALPR] Photo captured, processing...");
       
@@ -243,10 +287,17 @@ export default function ALPR() {
         confidence: plate.confidence,
       }));
       
+      // Log all detections for debugging
+      if (detections.length > 0) {
+        console.log(`[ALPR] Found ${detections.length} detection(s):`, detections.map(d => `${d.registration} (${(d.confidence * 100).toFixed(1)}%)`).join(', '));
+      } else {
+        console.log("[ALPR] No detections returned from ALPR service");
+      }
+      
       const bestDetection = getBestDetection(detections);
 
       if (bestDetection) {
-        console.log("[ALPR] Detection found:", bestDetection.registration, "Confidence:", bestDetection.confidence);
+        console.log("[ALPR] Best detection:", bestDetection.registration, `Confidence: ${(bestDetection.confidence * 100).toFixed(1)}%`);
         setLiveDetection(bestDetection);
 
         // Auto-capture if confidence is high enough (50%)
@@ -254,10 +305,14 @@ export default function ALPR() {
           console.log("[ALPR] Auto-capturing - confidence threshold met!");
           await handleAutoCapture();
         } else {
-          console.log("[ALPR] Detection found but confidence too low:", bestDetection.confidence, "< 0.5");
+          console.log("[ALPR] Detection found but confidence too low for auto-capture:", (bestDetection.confidence * 100).toFixed(1) + "% < 50%");
         }
       } else {
-        console.log("[ALPR] No detection found in frame");
+        if (detections.length > 0) {
+          console.log(`[ALPR] Detections found but all below ${MIN_CONFIDENCE_THRESHOLD * 100}% threshold`);
+        } else {
+          console.log("[ALPR] No detection found in frame");
+        }
         setLiveDetection(null);
       }
     } catch (error) {
@@ -323,16 +378,25 @@ export default function ALPR() {
 
     try {
       // Capture a fresh, high-quality image
+      // Optimize image size: max 1920px width to reduce processing time
+      const maxWidth = 1920;
+      const videoWidth = videoRef.current.videoWidth;
+      const videoHeight = videoRef.current.videoHeight;
+      const scale = videoWidth > maxWidth ? maxWidth / videoWidth : 1;
+      
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      canvas.width = videoWidth * scale;
+      canvas.height = videoHeight * scale;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         setProcessing(false);
         return;
       }
       
-      ctx.drawImage(videoRef.current, 0, 0);
+      // Use high-quality rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
 
       // Set the captured image immediately
@@ -358,14 +422,24 @@ export default function ALPR() {
     if (!videoRef.current) return;
 
     try {
+      // Optimize image size: max 1920px width to reduce processing time
+      const maxWidth = 1920;
+      const videoWidth = videoRef.current.videoWidth;
+      const videoHeight = videoRef.current.videoHeight;
+      const scale = videoWidth > maxWidth ? maxWidth / videoWidth : 1;
+      
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      canvas.width = videoWidth * scale;
+      canvas.height = videoHeight * scale;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       
-      ctx.drawImage(videoRef.current, 0, 0);
-      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+      // Use high-quality rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      // Use high quality for better ALPR detection
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.9);
 
       setCapturedImage(imageBase64);
       setDetection(null);
@@ -422,11 +496,25 @@ export default function ALPR() {
         confidence: plate.confidence,
       }));
       
+      // Log all detections for debugging
+      if (detections.length > 0) {
+        console.log(`[ALPR] Processing result: ${detections.length} detection(s):`, detections.map(d => `${d.registration} (${(d.confidence * 100).toFixed(1)}%)`).join(', '));
+      } else {
+        console.log("[ALPR] No detections returned from ALPR service");
+        if (result.message) {
+          console.log("[ALPR] Service message:", result.message);
+        }
+      }
+      
       const bestDetection = getBestDetection(detections);
       
       if (bestDetection) {
+        console.log("[ALPR] Best detection selected:", bestDetection.registration, `Confidence: ${(bestDetection.confidence * 100).toFixed(1)}%`);
         setDetection(bestDetection);
       } else {
+        if (detections.length > 0) {
+          console.log(`[ALPR] All ${detections.length} detection(s) below ${MIN_CONFIDENCE_THRESHOLD * 100}% threshold`);
+        }
         setDetection(null);
       }
     } catch (err) {
@@ -957,8 +1045,11 @@ export default function ALPR() {
                   <div className="font-semibold text-yellow-900 mb-1">
                     No license plate detected
                   </div>
-                  <div className="text-sm text-yellow-700">
-                    Try again with a clearer image of the license plate
+                  <div className="text-sm text-yellow-700 space-y-1">
+                    <p>Try again with a clearer image of the license plate</p>
+                    <p className="text-xs text-yellow-600 mt-2">
+                      Tips: Ensure good lighting, hold camera steady, fill frame with plate
+                    </p>
                   </div>
                 </div>
               ) : null}

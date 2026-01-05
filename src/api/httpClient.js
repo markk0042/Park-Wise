@@ -14,7 +14,7 @@ export function setAuthToken(token) {
   }
 }
 
-async function request(path, { method = 'GET', body, headers = {}, signal } = {}) {
+async function request(path, { method = 'GET', body, headers = {}, signal, timeout = 65000 } = {}) {
   const token = await getAccessToken();
   const isFormData = body instanceof FormData;
 
@@ -26,14 +26,21 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
   const url = `${API_BASE_URL}${path}`;
   console.log(`🌐 [HTTP] ${method} ${url}`, { body, headers: defaultHeaders });
 
+  // Create AbortController for timeout if not provided
+  const controller = signal ? null : new AbortController();
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeout) : null;
+
   try {
     const response = await fetch(url, {
       method,
       headers: { ...defaultHeaders, ...headers },
       body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
-      signal,
+      signal: signal || controller?.signal,
       credentials: 'include',
     });
+    
+    // Clear timeout if request completed
+    if (timeoutId) clearTimeout(timeoutId);
 
     console.log(`📡 [HTTP] Response status: ${response.status} ${response.statusText}`, {
       ok: response.ok,
@@ -72,6 +79,18 @@ async function request(path, { method = 'GET', body, headers = {}, signal } = {}
     console.log(`✅ [HTTP] Text response:`, textData);
     return textData;
   } catch (error) {
+    // Clear timeout if it was set
+    if (timeoutId) clearTimeout(timeoutId);
+    
+    // Handle timeout/abort errors
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+      const timeoutError = new Error(`Request timed out after ${timeout}ms`);
+      timeoutError.status = 408; // Request Timeout
+      timeoutError.isTimeout = true;
+      console.error(`❌ [HTTP] Request timeout:`, timeoutError);
+      throw timeoutError;
+    }
+    
     console.error(`❌ [HTTP] Request failed:`, {
       message: error.message,
       status: error.status,
