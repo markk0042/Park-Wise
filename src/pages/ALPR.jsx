@@ -39,6 +39,7 @@ export default function ALPR() {
   const [matchedVehicle, setMatchedVehicle] = useState(null);
   const [loggingSuccess, setLoggingSuccess] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [wakingUp, setWakingUp] = useState(false); // Track if service is being woken up
   
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -91,20 +92,38 @@ export default function ALPR() {
     };
   }, [mode, autoCapture, isCameraActive]);
 
-  const checkServiceHealth = async (retryCount = 0) => {
+  const checkServiceHealth = async (retryCount = 0, isManualWakeUp = false) => {
     // Try up to 3 times total (initial + 2 retries)
     // Render free tier services can take 30-60 seconds to wake up from sleep
     // Backend timeout is 60s, so retries give additional time if needed
     const maxRetries = 2;
     
+    // If this is a manual wake-up, show loading state
+    if (isManualWakeUp && retryCount === 0) {
+      setWakingUp(true);
+    }
+    
     try {
-      console.log(`[ALPR] Checking service health... (attempt ${retryCount + 1}/${maxRetries + 1})`);
+      console.log(`[ALPR] Checking service health... (attempt ${retryCount + 1}/${maxRetries + 1})${isManualWakeUp ? ' [Manual Wake-Up]' : ''}`);
       const result = await checkALPRHealth();
       console.log('[ALPR] Health check result:', result);
       const isAvailable = result?.service_available === true;
       console.log('[ALPR] Service available:', isAvailable);
       setServiceHealth(isAvailable);
       setServiceChecked(true);
+      
+      // If service is now available and this was a manual wake-up, show success
+      if (isAvailable && isManualWakeUp) {
+        setWakingUp(false);
+        toast({
+          title: "Service Ready",
+          description: "ALPR service is now active and ready to use.",
+          variant: "default",
+          duration: 3000,
+        });
+      } else if (!isAvailable && isManualWakeUp) {
+        setWakingUp(false);
+      }
     } catch (error) {
       console.error(`[ALPR] Health check error (attempt ${retryCount + 1}):`, error);
       
@@ -122,7 +141,7 @@ export default function ALPR() {
           const retryDelay = (retryCount + 1) * 10000; // 10s, 20s
           console.log(`[ALPR] Retrying health check in ${retryDelay / 1000} seconds... (Render free tier can take 30-60s to wake up)`);
           setTimeout(() => {
-            checkServiceHealth(retryCount + 1);
+            checkServiceHealth(retryCount + 1, isManualWakeUp);
           }, retryDelay);
           return; // Don't set serviceChecked yet, we're retrying
         }
@@ -131,7 +150,24 @@ export default function ALPR() {
       // If we've exhausted retries or it's not a retryable error, mark as unavailable
       setServiceHealth(false);
       setServiceChecked(true);
+      
+      // If this was a manual wake-up and it failed, show error
+      if (isManualWakeUp) {
+        setWakingUp(false);
+        toast({
+          title: "Wake-Up Failed",
+          description: "Could not wake up the service. It may take longer than expected. You can still try scanning directly.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
     }
+  };
+
+  // Manual wake-up function
+  const wakeUpService = async () => {
+    console.log('[ALPR] Manual wake-up initiated by user');
+    await checkServiceHealth(0, true);
   };
 
   const startAutoCapture = () => {
@@ -652,17 +688,40 @@ export default function ALPR() {
           </p>
           {/* Service Status - Centered under subtitle */}
           {serviceChecked && serviceHealth !== null && (
-            <div className="flex items-center justify-center gap-2 mt-2">
-              {serviceHealth ? (
-                <>
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  <span className="text-sm text-green-600">Service Online</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="h-5 w-5 text-red-500" />
-                  <span className="text-sm text-red-600">Service Offline</span>
-                </>
+            <div className="flex flex-col items-center justify-center gap-2 mt-2">
+              <div className="flex items-center justify-center gap-2">
+                {serviceHealth ? (
+                  <>
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    <span className="text-sm text-green-600">Service Online</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-5 w-5 text-red-500" />
+                    <span className="text-sm text-red-600">Service Offline</span>
+                  </>
+                )}
+              </div>
+              
+              {/* Wake Up Button - Show when service is offline */}
+              {!serviceHealth && !wakingUp && (
+                <Button
+                  onClick={wakeUpService}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                >
+                  <Loader2 className="h-4 w-4 mr-2" />
+                  Wake Up Service
+                </Button>
+              )}
+              
+              {/* Waking Up Indicator */}
+              {wakingUp && (
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  <span className="text-sm text-blue-600">Waking up service... (30-60s)</span>
+                </div>
               )}
             </div>
           )}
