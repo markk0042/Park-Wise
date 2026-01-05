@@ -89,6 +89,7 @@ function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
     const [checking2FA, setChecking2FA] = useState(false);
+    const [local2FAStatus, setLocal2FAStatus] = useState(null); // Local 2FA status for routing
     
     // Call useAuth to get authentication state
     const { isAuthenticated, loading, error, profile: user, twoFactorStatus, token, refreshProfile } = useAuth();
@@ -109,8 +110,9 @@ function PagesContent() {
                 return;
             }
             
-            // If twoFactorStatus is already loaded, don't check again
+            // If twoFactorStatus is already loaded from AuthContext, use it
             if (twoFactorStatus) {
+                setLocal2FAStatus(twoFactorStatus);
                 return;
             }
             
@@ -125,13 +127,12 @@ function PagesContent() {
             
             try {
                 const status = await check2FAStatus();
+                setLocal2FAStatus(status); // Store result for Navigate component
                 
-                // If 2FA is required but not enabled, redirect to setup
-                if (status.required && !status.enabled) {
-                    window.location.href = '/2fa/setup';
-                }
+                // Navigate component below will handle redirect based on local2FAStatus
             } catch (err) {
                 console.error('Error checking 2FA status:', err);
+                // Don't block the app if 2FA check fails - allow user to proceed
             } finally {
                 checking2FARef.current = false;
                 setChecking2FA(false);
@@ -188,17 +189,15 @@ function PagesContent() {
     
     // MANDATORY 2FA CHECK: For non-admin users, 2FA is REQUIRED
     // Block access to all pages except /2fa/setup if 2FA is not enabled
-    // Note: We check twoFactorStatus, but if it's null/undefined, we need to check it
+    // Use local2FAStatus (from useEffect) or twoFactorStatus (from AuthContext)
+    const effective2FAStatus = local2FAStatus || twoFactorStatus;
+    
     if (user?.role !== 'admin' && user?.status === 'approved' && location.pathname !== '/2fa/setup') {
-        if (twoFactorStatus) {
-            if (twoFactorStatus.required && !twoFactorStatus.enabled) {
-                // Non-admin user without 2FA - redirect to setup
+        if (effective2FAStatus) {
+            if (effective2FAStatus.required && !effective2FAStatus.enabled) {
+                // Non-admin user without 2FA - redirect to setup using React Router (no page reload)
                 return <Navigate to="/2fa/setup" replace />;
             }
-        } else if (!checking2FA && token) {
-            // twoFactorStatus not loaded yet, but we have a token - check it
-            // This will be handled by the useEffect that checks 2FA status
-            // For now, allow access (the useEffect will redirect if needed)
         } else if (checking2FA) {
             // Still checking 2FA status, show loading
             return (
@@ -207,6 +206,7 @@ function PagesContent() {
                 </div>
             );
         }
+        // If not checking and no status yet, allow access (will redirect once status is loaded)
     }
     
     // Block pending users from accessing the app

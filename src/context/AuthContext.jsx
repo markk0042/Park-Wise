@@ -176,24 +176,28 @@ export function AuthProvider({ children }) {
             if (user) {
               setProfile(user);
             } else {
-              // Backend returned no user - clear session
-              console.log('🔐 Backend returned no user - clearing session');
-              setToken(null);
-              setProfile(null);
-              setAuthToken(null);
-              await supabase.auth.signOut();
+              // Backend returned no user - only clear if it's an auth error
+              // Don't clear on network errors to prevent loops
+              console.log('🔐 Backend returned no user - will retry via useEffect');
+              // Don't sign out immediately - let useEffect handle retry
+              // This prevents infinite loops when backend is temporarily unavailable
             }
           } catch (err) {
             console.error('Error syncing with backend:', err);
-            // If backend fails (401, etc.), clear session
-            if (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+            // Only clear session on authentication errors (401/403)
+            // Don't clear on network errors, timeouts, or 500 errors
+            if (err?.status === 401 || err?.status === 403 || 
+                err?.message?.includes('401') || err?.message?.includes('403') || 
+                err?.message?.includes('Unauthorized') || err?.message?.includes('Forbidden')) {
               console.log('🔐 Backend authentication failed - clearing session');
               setToken(null);
               setProfile(null);
               setAuthToken(null);
               await supabase.auth.signOut();
             } else {
-              // Other errors - profile will be loaded by useEffect
+              // Other errors (network, timeout, 500) - don't sign out
+              // Profile will be loaded by useEffect, which will retry
+              console.log('🔐 Backend sync failed (non-auth error) - will retry via useEffect');
             }
           }
         } else if (event === 'TOKEN_REFRESHED') {
@@ -323,8 +327,12 @@ export function AuthProvider({ children }) {
         setError(null);
       } catch (err) {
         console.error('Error loading profile:', err);
-        // Handle 401 errors gracefully (session expired or invalid)
-        if (err?.status === 401 || err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+        // Only clear session on authentication errors (401/403)
+        // Don't clear session on network errors or server errors (500, timeout, etc.)
+        // This prevents infinite loops when backend is temporarily unavailable
+        if (err?.status === 401 || err?.status === 403 || 
+            err?.message?.includes('401') || err?.message?.includes('403') || 
+            err?.message?.includes('Unauthorized') || err?.message?.includes('Forbidden')) {
           console.log('🔒 Session expired or invalid - clearing session');
           // Store session expiration reason for Login page to display
           sessionStorage.setItem('session_expired', 'true');
@@ -334,13 +342,12 @@ export function AuthProvider({ children }) {
           // Sign out from Supabase as well
           await supabase.auth.signOut();
         } else {
-          // If profile fetch fails for other reasons, clear session
-          console.log('🔒 Profile fetch failed - clearing session');
+          // For network errors, timeouts, 500 errors, etc. - don't sign out
+          // Just set error state and let user retry or wait
+          console.log('🔒 Profile fetch failed (non-auth error) - keeping session, showing error');
           setError(err);
-          setProfile(null);
-          setToken(null);
-          setAuthToken(null);
-          await supabase.auth.signOut();
+          // Don't clear token/profile - keep the session alive
+          // The user can retry or the app will retry on next token refresh
         }
       } finally {
         setLoading(false);
