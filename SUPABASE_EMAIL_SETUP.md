@@ -120,3 +120,4 @@ The Edge Function uses these secrets (set via `supabase secrets set`):
 
 If you prefer to use your own email provider, you can still use the old method by configuring SMTP/Gmail in `server/.env` (the code supports both methods).
 
+

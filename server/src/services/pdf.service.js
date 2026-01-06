@@ -119,3 +119,4 @@ export const generateReportPDF = async (logs, startDate, endDate) => {
   });
 };
 
+

@@ -184,7 +184,8 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
 };
 
 /**
- * Send parking report email with CSV or PDF attachment via Supabase Edge Function
+ * Send parking report email with CSV or PDF attachment
+ * Uses SMTP/Gmail if configured (allows sending to any email), otherwise falls back to Supabase Edge Function (Resend)
  */
 export const sendReportEmail = async (toEmail, reportData) => {
   const { startDate, endDate, logs, attachment, format = 'csv' } = reportData;
@@ -273,7 +274,53 @@ export const sendReportEmail = async (toEmail, reportData) => {
     This is an automated report from Park Wise.
   `;
 
-  // Use Supabase Edge Function to send email
+  // Try SMTP/Gmail first (allows sending to any email)
+  const transporter = createTransporter();
+  
+  if (transporter) {
+    // Use SMTP/Gmail - can send to any email address
+    try {
+      const mailOptions = {
+        from: env.EMAIL_FROM || env.SMTP_USER || env.GMAIL_USER || 'noreply@parkwise.com',
+        to: toEmail,
+        subject: `Park Wise Parking Report - ${dateRange} (${format.toUpperCase()})`,
+        html: htmlContent,
+        text: textContent,
+      };
+
+      // Add attachment if provided
+      if (attachment) {
+        // Convert base64 content to buffer for nodemailer
+        const attachmentBuffer = Buffer.from(attachment.content, 'base64');
+        mailOptions.attachments = [
+          {
+            filename: attachment.filename,
+            content: attachmentBuffer,
+            contentType: attachment.contentType,
+          }
+        ];
+      }
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Report email sent successfully via SMTP/Gmail');
+      console.log('   To:', toEmail);
+      console.log('   Date Range:', dateRange);
+      console.log('   Message ID:', info.messageId);
+      
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error('❌ Failed to send report email via SMTP/Gmail:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        command: error.command
+      });
+      // Fall through to try Edge Function as fallback
+      console.log('⚠️  Falling back to Supabase Edge Function (Resend)...');
+    }
+  }
+
+  // Fallback to Supabase Edge Function (Resend) if SMTP/Gmail not configured or failed
   try {
     const edgeFunctionUrl = `${env.SUPABASE_URL}/functions/v1/send-report-email`;
     
