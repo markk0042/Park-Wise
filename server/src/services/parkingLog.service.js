@@ -2,12 +2,25 @@ import { supabaseAdmin } from '../config/supabase.js';
 
 const PARKING_LOG_TABLE = 'parking_logs';
 
-export const listParkingLogs = async ({ limit = 200, orderBy = 'created_at', ascending = false }) => {
-  const { data, error } = await supabaseAdmin
+export const listParkingLogs = async ({ limit = 1000, orderBy = 'created_at', ascending = false, startDate, endDate }) => {
+  let query = supabaseAdmin
     .from(PARKING_LOG_TABLE)
-    .select('*')
+    .select('*');
+  
+  // Add date filtering if provided
+  if (startDate) {
+    query = query.gte('log_date', startDate);
+  }
+  if (endDate) {
+    query = query.lte('log_date', endDate);
+  }
+  
+  // Apply ordering and limit
+  query = query
     .order(orderBy, { ascending })
     .limit(limit);
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return data;

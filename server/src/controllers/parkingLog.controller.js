@@ -16,7 +16,9 @@ const parkingLogSchema = z.object({
 export const getParkingLogs = async (req, res, next) => {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const logs = await listParkingLogs({ limit });
+    const startDate = req.query.startDate || undefined;
+    const endDate = req.query.endDate || undefined;
+    const logs = await listParkingLogs({ limit, startDate, endDate });
     res.json({ logs });
   } catch (err) {
     next(err);

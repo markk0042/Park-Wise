@@ -102,8 +102,13 @@ export const bulkReplaceVehicles = (vehicles) => httpClient.post('/vehicles/bulk
 export const updateAllParkingTypes = () => httpClient.post('/vehicles/update-parking-types');
 
 // Parking Logs
-export const fetchParkingLogs = async (limit) => {
-  const { logs } = await httpClient.get(`/parking-logs${limit ? `?limit=${limit}` : ''}`);
+export const fetchParkingLogs = async (limit, startDate, endDate) => {
+  const params = new URLSearchParams();
+  if (limit) params.append('limit', limit);
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  const queryString = params.toString();
+  const { logs } = await httpClient.get(`/parking-logs${queryString ? `?${queryString}` : ''}`);
   return logs;
 };
 export const createParkingLog = async (payload) => {
