@@ -117,6 +117,17 @@ export const createParkingLog = async (payload) => {
 };
 export const deleteParkingLog = (id) => httpClient.delete(`/parking-logs/${id}`);
 
+// Reports
+export const sendReportEmail = async (email, startDate, endDate, format = 'csv') => {
+  const { success, message, devMode, error } = await httpClient.post('/reports/send', {
+    email,
+    startDate,
+    endDate,
+    format // 'csv' or 'pdf'
+  });
+  return { success, message, devMode, error };
+};
+
 // Complaints
 export const fetchComplaints = async () => {
   const { complaints } = await httpClient.get('/complaints');

@@ -16,6 +16,7 @@ export default function ReportGenerator({ logs }) {
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [email, setEmail] = useState("");
+  const [emailFormat, setEmailFormat] = useState("csv"); // 'csv' or 'pdf'
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -114,13 +115,43 @@ export default function ReportGenerator({ logs }) {
     document.body.removeChild(link);
   };
 
-  const sendEmail = () => {
+  const sendEmail = async () => {
+    if (!email || !email.includes('@')) {
+      setMessage("Please enter a valid email address.");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+
+    if (filteredLogs.length === 0) {
+      setMessage("No logs found for the selected date range.");
+      setTimeout(() => setMessage(""), 3000);
+      return;
+    }
+
     setSending(true);
-    setMessage("Email delivery is not available in this version. Download the CSV instead.");
-    setTimeout(() => {
+    setMessage("");
+
+    try {
+      const { sendReportEmail } = await import('@/api');
+      const result = await sendReportEmail(email, startDate, endDate, emailFormat);
+      
+      if (result.success) {
+        if (result.devMode) {
+          setMessage("✅ Email would be sent (dev mode - check console for details)");
+        } else {
+          setMessage("✅ Report sent successfully!");
+        }
+        setEmail(""); // Clear email field after success
+      } else {
+        setMessage(`❌ ${result.error || 'Failed to send email. Please check email configuration.'}`);
+      }
+    } catch (error) {
+      console.error('Error sending report email:', error);
+      setMessage(`❌ ${error.message || 'Failed to send email. Please try again.'}`);
+    } finally {
       setSending(false);
-      setMessage("");
-    }, 2000);
+      setTimeout(() => setMessage(""), 5000);
+    }
   };
 
   const handlePrint = async () => {
@@ -228,32 +259,60 @@ export default function ReportGenerator({ logs }) {
             <Label htmlFor="email" className="text-sm md:text-base font-semibold mb-2 block">
               Or Email Formatted Report
             </Label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                id="email"
-                type="email"
-                placeholder="recipient@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 h-10 md:h-11 text-sm md:text-base"
-              />
-              <Button
-                onClick={sendEmail}
-                disabled={sending || filteredLogs.length === 0}
-                className="bg-blue-600 hover:bg-blue-700 h-10 md:h-11 text-sm md:text-base sm:px-6"
-              >
-                {sending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-                    Send
-                  </>
-                )}
-              </Button>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 mb-2">
+                <Label htmlFor="format-csv" className="text-sm font-normal cursor-pointer flex items-center gap-2">
+                  <input
+                    type="radio"
+                    id="format-csv"
+                    name="emailFormat"
+                    value="csv"
+                    checked={emailFormat === 'csv'}
+                    onChange={(e) => setEmailFormat(e.target.value)}
+                    className="w-4 h-4"
+                  />
+                  CSV Format
+                </Label>
+                <Label htmlFor="format-pdf" className="text-sm font-normal cursor-pointer flex items-center gap-2">
+                  <input
+                    type="radio"
+                    id="format-pdf"
+                    name="emailFormat"
+                    value="pdf"
+                    checked={emailFormat === 'pdf'}
+                    onChange={(e) => setEmailFormat(e.target.value)}
+                    className="w-4 h-4"
+                  />
+                  PDF Format
+                </Label>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="recipient@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="flex-1 h-10 md:h-11 text-sm md:text-base"
+                />
+                <Button
+                  onClick={sendEmail}
+                  disabled={sending || filteredLogs.length === 0}
+                  className="bg-blue-600 hover:bg-blue-700 h-10 md:h-11 text-sm md:text-base sm:px-6"
+                >
+                  {sending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+                      Send {emailFormat.toUpperCase()}
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
+import { supabaseAdmin } from '../config/supabase.js';
 
 /**
  * Create email transporter
@@ -177,6 +178,145 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       message: error.message,
       code: error.code,
       command: error.command
+    });
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
+};
+
+/**
+ * Send parking report email with CSV or PDF attachment via Supabase Edge Function
+ */
+export const sendReportEmail = async (toEmail, reportData) => {
+  const { startDate, endDate, logs, attachment, format = 'csv' } = reportData;
+
+  // Format date range for subject
+  const dateRange = startDate === endDate 
+    ? startDate 
+    : `${startDate} to ${endDate}`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 30px;
+            border: 1px solid #e0e0e0;
+          }
+          .header {
+            background-color: #1e293b;
+            color: white;
+            padding: 20px;
+            border-radius: 8px 8px 0 0;
+            margin: -30px -30px 20px -30px;
+          }
+          .stats {
+            background-color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 4px solid #1e293b;
+          }
+          .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #666;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📊 Parking Report</h1>
+          </div>
+          <p>Hello,</p>
+          <p>Please find attached your parking report for <strong>${dateRange}</strong>.</p>
+          <div class="stats">
+            <p><strong>Total Vehicles Logged:</strong> ${logs.length}</p>
+            <p><strong>Green Permits:</strong> ${logs.filter(l => l.parking_type === 'Green').length}</p>
+            <p><strong>Yellow Permits:</strong> ${logs.filter(l => l.parking_type === 'Yellow').length}</p>
+            <p><strong>Unregistered (Red):</strong> ${logs.filter(l => l.parking_type === 'Red').length}</p>
+          </div>
+            <p>The ${format === 'pdf' ? 'PDF' : 'CSV'} file is attached to this email for your records.</p>
+          <div class="footer">
+            <p>This is an automated report from Park Wise. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const textContent = `
+    Parking Report - Park Wise
+    
+    Date Range: ${dateRange}
+    Total Vehicles Logged: ${logs.length}
+    Green Permits: ${logs.filter(l => l.parking_type === 'Green').length}
+    Yellow Permits: ${logs.filter(l => l.parking_type === 'Yellow').length}
+    Unregistered (Red): ${logs.filter(l => l.parking_type === 'Red').length}
+    
+      Please see the attached ${format === 'pdf' ? 'PDF' : 'CSV'} file for detailed information.
+    
+    This is an automated report from Park Wise.
+  `;
+
+  // Use Supabase Edge Function to send email
+  try {
+    const edgeFunctionUrl = `${env.SUPABASE_URL}/functions/v1/send-report-email`;
+    
+    const emailPayload = {
+      to: toEmail,
+      subject: `Park Wise Parking Report - ${dateRange} (${format.toUpperCase()})`,
+      html: htmlContent,
+      text: textContent,
+    };
+
+    // Add attachment if provided
+    if (attachment) {
+      emailPayload.attachment = attachment;
+    }
+    
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+      },
+      body: JSON.stringify(emailPayload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('❌ Edge Function error:', errorData);
+      throw new Error(`Failed to send email via Supabase Edge Function: ${errorData}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ Report email sent successfully via Supabase Edge Function');
+    console.log('   To:', toEmail);
+    console.log('   Date Range:', dateRange);
+    console.log('   Message ID:', result.messageId);
+    
+    return { success: true, messageId: result.messageId };
+  } catch (error) {
+    console.error('❌ Failed to send report email:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
     });
     throw new Error(`Failed to send email: ${error.message}`);
   }
