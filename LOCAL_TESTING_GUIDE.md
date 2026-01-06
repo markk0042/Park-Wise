@@ -361,7 +361,7 @@ Once everything works locally:
    ```
 
 3. **Deploy:**
-   - Deploy Python ALPR service (Render, Railway, etc.)
+   - Deploy Python ALPR service to Render (recommended: Starter plan for Zero Downtime)
    - Update `ALPR_SERVICE_URL` in production environment
    - Deploy backend and frontend as usual
 

@@ -85,32 +85,7 @@ Your backend is deployed on Render, but it needs to connect to the Python ALPR s
 
 ---
 
-## Option 2: Deploy to Railway
-
-### Step 1: Create Railway Project
-
-1. Go to https://railway.app
-2. Click "New Project"
-3. Select "Deploy from GitHub repo"
-4. Select your repository
-
-### Step 2: Add Python Service
-
-1. Click "New" → "GitHub Repo"
-2. Select your repository
-3. **Configure:**
-   - **Root Directory:** `alpr/anpr-set-up`
-   - **Start Command:** `python app.py`
-   - Railway will auto-detect Python
-
-### Step 3: Get URL and Update Backend
-
-1. Railway will provide a URL like: `https://alpr-production.up.railway.app`
-2. Update `ALPR_SERVICE_URL` in your backend environment
-
----
-
-## Option 3: Use Existing VPS (OVH)
+## Option 2: Use Existing VPS (OVH)
 
 If you have the OVH VPS from before:
 
@@ -188,8 +163,8 @@ If you want to test locally before deploying:
 
 **Solution:**
 - Render free tier spins down after 15 min inactivity
-- Consider paid tier for always-on
-- Or use Railway/Railway free tier
+- Consider Starter plan ($7/month) for always-on (Zero Downtime)
+- Or use external cron jobs to keep service awake
 
 ### Issue: Backend still can't connect
 
