@@ -91,3 +91,5 @@ If you prefer using the web interface:
 - Verify Resend API key is valid
 - Check Resend dashboard for delivery status
 
+
+

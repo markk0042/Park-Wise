@@ -84,3 +84,5 @@ So if Gmail is configured, you can send to **any email address**!
 
 **That's it!** Once configured, you can send PDF reports to any email address. 🎉
 
+
+

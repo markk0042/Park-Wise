@@ -286,32 +286,32 @@ export default function ReportGenerator({ logs }) {
                   PDF Format
                 </Label>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="recipient@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 h-10 md:h-11 text-sm md:text-base"
-                />
-                <Button
-                  onClick={sendEmail}
-                  disabled={sending || filteredLogs.length === 0}
-                  className="bg-blue-600 hover:bg-blue-700 h-10 md:h-11 text-sm md:text-base sm:px-6"
-                >
-                  {sending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                id="email"
+                type="email"
+                placeholder="recipient@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="flex-1 h-10 md:h-11 text-sm md:text-base"
+              />
+              <Button
+                onClick={sendEmail}
+                disabled={sending || filteredLogs.length === 0}
+                className="bg-blue-600 hover:bg-blue-700 h-10 md:h-11 text-sm md:text-base sm:px-6"
+              >
+                {sending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                       Send {emailFormat.toUpperCase()}
-                    </>
-                  )}
-                </Button>
+                  </>
+                )}
+              </Button>
               </div>
             </div>
           </div>

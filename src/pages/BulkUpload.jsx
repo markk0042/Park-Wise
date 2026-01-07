@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Download, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { bulkReplaceVehicles } from "@/api";
+import { bulkUpsertVehicles } from "@/api";
 import { autoAssignParkingType } from "@/utils/permitUtils";
 
 export default function BulkUpload() {
@@ -231,7 +231,8 @@ export default function BulkUpload() {
             notes: v.notes?.trim() || "",
             is_active: true
           };
-          // Auto-assign parking type based on permit number
+          // Auto-assign parking type based on permit number:
+          // 00001–00601 = Green, 00602+ = Yellow, no permit = Red (unregistered)
           return autoAssignParkingType(vehicleData);
         });
 
@@ -240,8 +241,9 @@ export default function BulkUpload() {
       }
 
       setUploadStatus("saving");
-      // Use bulk replace to delete all existing vehicles and insert new ones
-      const result = await bulkReplaceVehicles(normalizedVehicles);
+      // Upsert all vehicles: existing registrations are updated, new ones are added
+      // Green/Yellow are set from permit range, missing permit numbers become Red/unregistered
+      const result = await bulkUpsertVehicles(normalizedVehicles);
       
       return result;
     },
@@ -312,9 +314,12 @@ export default function BulkUpload() {
             <Upload className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 shrink-0" />
             Bulk Vehicle Upload
           </h1>
-          <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">
-            Upload a CSV file to replace all vehicles in the database. All existing vehicles will be deleted and replaced with the new list. Permit colors are automatically assigned: 00001-00601 = Green, 00602+ = Yellow, No permit = Red (GDPR compliant).
-          </p>
+            <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1">
+              Upload a CSV file to <strong>add or update all vehicles</strong> in one go.
+              Green and Yellow permits follow the existing numeric ranges (00001–00601 = Green, 00602+ = Yellow),
+              and any registration with a blank permit number is automatically set to <strong>Red / Unregistered</strong>.
+              Existing records are <strong>updated</strong>, new registrations are <strong>added</strong> — nothing is wiped.
+            </p>
         </div>
 
         <Card className="bg-blue-50 border-blue-200">
@@ -326,12 +331,12 @@ export default function BulkUpload() {
           </CardHeader>
           <CardContent className="space-y-3 text-xs sm:text-sm text-blue-900 px-4 sm:px-5 md:px-6">
             <div className="space-y-2">
-              <p className="font-semibold">📋 Required Columns:</p>
+              <p className="font-semibold">📋 Required / Recommended Columns:</p>
               <ul className="list-disc list-inside space-y-1 ml-2 text-xs sm:text-sm">
                 <li><strong>registration_plate</strong> - Vehicle registration (required)</li>
-                <li><strong>permit_number</strong> - Permit number (e.g., 00001)</li>
+                <li><strong>permit_number</strong> - Permit number (e.g., 00001). Leave blank for Red/unregistered vehicles</li>
                 <li><strong>country</strong> - Ireland, Northern Ireland, or UK (default: Ireland)</li>
-                <li><strong>parking_type</strong> - Green, Yellow, or Red (default: Green)</li>
+                <li><strong>parking_type</strong> - Green, Yellow, or Red (auto-set based on permit range or Red when permit_number is blank)</li>
                 <li><strong>notes</strong> - Any additional notes</li>
               </ul>
               <p className="text-xs mt-3 text-blue-700">
@@ -413,11 +418,10 @@ export default function BulkUpload() {
           <Alert className="bg-emerald-50 border-emerald-200">
             <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-emerald-600" />
             <AlertDescription className="text-emerald-900 text-sm md:text-base">
-              <strong>Success!</strong> Replaced all vehicles in the database:
+              <strong>Success!</strong> Vehicles processed:
               <ul className="mt-2 list-disc list-inside space-y-1">
-                <li>All previous vehicles deleted</li>
-                <li><strong>{insertedCount}</strong> new vehicles added</li>
-                <li>Permit colors automatically assigned (00001-00601 = Green, 00602+ = Yellow, No permit = Red)</li>
+                <li><strong>{insertedCount}</strong> vehicles inserted</li>
+                <li>Green/Yellow assigned from permit ranges; registrations with no permit set as Red / Unregistered</li>
               </ul>
             </AlertDescription>
           </Alert>
