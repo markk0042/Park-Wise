@@ -575,7 +575,7 @@ export default function VehicleDatabase() {
             </div>
 
             {/* Color Tabs */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 variant={selectedColor === "Green" ? "default" : "outline"}
                 onClick={() => {
@@ -605,6 +605,19 @@ export default function VehicleDatabase() {
               >
                 <div className="w-3 h-3 rounded-full bg-amber-500 border-2 border-amber-700" />
                 Yellow Permits
+              </Button>
+              <Button
+                variant={selectedColor === "Red" ? "default" : "outline"}
+                onClick={() => {
+                  setSelectedColor("Red");
+                  // Red = unregistered (usually no permit number), so range is less important
+                  // Keep a default range for consistency but it won't filter out no-permit vehicles
+                  setSelectedRange("00001-00100");
+                }}
+                className={`flex items-center gap-2 ${selectedColor === "Red" ? "bg-red-600 hover:bg-red-700" : ""}`}
+              >
+                <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-700" />
+                Red / Unregistered
               </Button>
             </div>
 
