@@ -279,7 +279,7 @@ export default function VehicleDatabase() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 md:p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
               <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
                 <p className="text-xs md:text-sm text-blue-700 font-semibold mb-1">Total Registrations</p>
                 <p className="text-2xl md:text-4xl font-bold text-blue-900">{vehicles.length}</p>
@@ -288,6 +288,26 @@ export default function VehicleDatabase() {
                 <p className="text-xs md:text-sm text-purple-700 font-semibold mb-1">Total Permits</p>
                 <p className="text-2xl md:text-4xl font-bold text-purple-900">
                   {new Set(vehicles.filter(v => v.permit_number).map(v => v.permit_number)).size}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+              <div className="bg-emerald-50 p-3 md:p-4 rounded-lg border-2 border-emerald-200">
+                <p className="text-xs md:text-sm text-emerald-700 font-semibold mb-1">Green Permits</p>
+                <p className="text-xl md:text-3xl font-bold text-emerald-900">
+                  {vehicles.filter(v => v.parking_type === "Green").length}
+                </p>
+              </div>
+              <div className="bg-amber-50 p-3 md:p-4 rounded-lg border-2 border-amber-200">
+                <p className="text-xs md:text-sm text-amber-700 font-semibold mb-1">Yellow Permits</p>
+                <p className="text-xl md:text-3xl font-bold text-amber-900">
+                  {vehicles.filter(v => v.parking_type === "Yellow").length}
+                </p>
+              </div>
+              <div className="bg-red-50 p-3 md:p-4 rounded-lg border-2 border-red-200">
+                <p className="text-xs md:text-sm text-red-700 font-semibold mb-1">Red (Unregistered)</p>
+                <p className="text-xl md:text-3xl font-bold text-red-900">
+                  {vehicles.filter(v => v.parking_type === "Red").length}
                 </p>
               </div>
             </div>

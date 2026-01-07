@@ -3,10 +3,14 @@ import { supabaseAdmin } from '../config/supabase.js';
 const VEHICLE_TABLE = 'vehicles';
 
 export const listVehicles = async ({ orderBy = 'permit_number', ascending = true } = {}) => {
+  // Supabase defaults to returning a maximum of 1,000 rows unless a range is specified.
+  // To ensure we see the full vehicle database (e.g. 1,900+ registrations),
+  // explicitly request a larger range.
   const { data, error } = await supabaseAdmin
     .from(VEHICLE_TABLE)
     .select('*')
-    .order(orderBy, { ascending });
+    .order(orderBy, { ascending })
+    .range(0, 4999); // Support up to 5,000 vehicles in one query
 
   if (error) throw error;
   return data;
