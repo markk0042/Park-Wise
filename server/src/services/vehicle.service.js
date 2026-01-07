@@ -51,9 +51,11 @@ export const deleteVehicle = async (id) => {
 export const deleteAllVehicles = async () => {
   // Delete all vehicles by selecting all IDs first, then deleting them
   // This avoids UUID comparison issues
+  // Use range to ensure we get all vehicles, not just first 1000
   const { data: allVehicles, error: fetchError } = await supabaseAdmin
     .from(VEHICLE_TABLE)
-    .select('id');
+    .select('id')
+    .range(0, 4999); // Support up to 5,000 vehicles
   
   if (fetchError) throw fetchError;
   
@@ -259,10 +261,11 @@ const getParkingTypeFromPermit = (permitNumber) => {
  * Permits >= 602 (00602) will be set to Yellow, others to Green
  */
 export const updateParkingTypesFromPermits = async () => {
-  // Get all vehicles
+  // Get all vehicles - use range to ensure we get all vehicles, not just first 1000
   const { data: vehicles, error: fetchError } = await supabaseAdmin
     .from(VEHICLE_TABLE)
-    .select('id, permit_number, parking_type');
+    .select('id, permit_number, parking_type')
+    .range(0, 4999); // Support up to 5,000 vehicles
   
   if (fetchError) throw fetchError;
   if (!vehicles || vehicles.length === 0) {
