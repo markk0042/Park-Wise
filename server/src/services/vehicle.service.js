@@ -3,17 +3,34 @@ import { supabaseAdmin } from '../config/supabase.js';
 const VEHICLE_TABLE = 'vehicles';
 
 export const listVehicles = async ({ orderBy = 'permit_number', ascending = true } = {}) => {
-  // Supabase defaults to returning a maximum of 1,000 rows unless a range is specified.
-  // To ensure we see the full vehicle database (e.g. 1,900+ registrations),
-  // explicitly request a larger range.
-  const { data, error } = await supabaseAdmin
-    .from(VEHICLE_TABLE)
-    .select('*')
-    .order(orderBy, { ascending })
-    .range(0, 4999); // Support up to 5,000 vehicles in one query
+  // Supabase/PostgREST has a hard limit of 1,000 rows per query.
+  // To get all vehicles, we need to paginate through all results.
+  const allVehicles = [];
+  const pageSize = 1000;
+  let from = 0;
+  let hasMore = true;
 
-  if (error) throw error;
-  return data;
+  while (hasMore) {
+    const { data, error } = await supabaseAdmin
+      .from(VEHICLE_TABLE)
+      .select('*')
+      .order(orderBy, { ascending })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      allVehicles.push(...data);
+      from += pageSize;
+      // If we got less than pageSize, we've reached the end
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  console.log(`[listVehicles] Fetched ${allVehicles.length} vehicles using pagination`);
+  return allVehicles;
 };
 
 export const createVehicle = async (payload) => {
@@ -51,17 +68,34 @@ export const deleteVehicle = async (id) => {
 export const deleteAllVehicles = async () => {
   // Delete all vehicles by selecting all IDs first, then deleting them
   // This avoids UUID comparison issues
-  // Use range to ensure we get all vehicles, not just first 1000
-  const { data: allVehicles, error: fetchError } = await supabaseAdmin
-    .from(VEHICLE_TABLE)
-    .select('id')
-    .range(0, 4999); // Support up to 5,000 vehicles
+  // Use pagination to get all vehicles, not just first 1000
+  const allVehicleIds = [];
+  const pageSize = 1000;
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error: fetchError } = await supabaseAdmin
+      .from(VEHICLE_TABLE)
+      .select('id')
+      .range(from, from + pageSize - 1);
+    
+    if (fetchError) throw fetchError;
+    
+    if (data && data.length > 0) {
+      allVehicleIds.push(...data.map(v => v.id));
+      from += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
   
-  if (fetchError) throw fetchError;
-  
-  if (!allVehicles || allVehicles.length === 0) {
+  if (allVehicleIds.length === 0) {
     return; // Nothing to delete
   }
+  
+  const allVehicles = allVehicleIds.map(id => ({ id }));
   
   // Delete in batches to avoid overwhelming the database
   const batchSize = 500;
@@ -261,13 +295,31 @@ const getParkingTypeFromPermit = (permitNumber) => {
  * Permits >= 602 (00602) will be set to Yellow, others to Green
  */
 export const updateParkingTypesFromPermits = async () => {
-  // Get all vehicles - use range to ensure we get all vehicles, not just first 1000
-  const { data: vehicles, error: fetchError } = await supabaseAdmin
-    .from(VEHICLE_TABLE)
-    .select('id, permit_number, parking_type')
-    .range(0, 4999); // Support up to 5,000 vehicles
+  // Get all vehicles - use pagination to ensure we get all vehicles, not just first 1000
+  const allVehicles = [];
+  const pageSize = 1000;
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error: fetchError } = await supabaseAdmin
+      .from(VEHICLE_TABLE)
+      .select('id, permit_number, parking_type')
+      .range(from, from + pageSize - 1);
+    
+    if (fetchError) throw fetchError;
+    
+    if (data && data.length > 0) {
+      allVehicles.push(...data);
+      from += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
   
-  if (fetchError) throw fetchError;
+  const vehicles = allVehicles;
+  
   if (!vehicles || vehicles.length === 0) {
     return { updated: 0, total: 0 };
   }
