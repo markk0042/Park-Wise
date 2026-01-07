@@ -40,6 +40,9 @@ export default function VehicleDatabase() {
     queryFn: () => fetchVehicles("permit_number"),
     enabled: user?.role === 'admin',
     refetchInterval: 60000,
+    // Force fresh data - bypass cache
+    staleTime: 0,
+    cacheTime: 0,
   });
 
   // Debug: Log vehicle count to verify backend is returning all vehicles

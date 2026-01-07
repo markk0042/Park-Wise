@@ -22,6 +22,12 @@ const vehicleSchema = z.object({
 export const getVehicles = async (req, res, next) => {
   try {
     const vehicles = await listVehicles({ orderBy: req.query.orderBy || 'permit_number' });
+    // Log vehicle count for debugging
+    console.log(`[getVehicles] Returning ${vehicles.length} vehicles`);
+    // Disable caching to ensure fresh data after backend update
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.json({ vehicles });
   } catch (err) {
     next(err);

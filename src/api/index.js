@@ -83,7 +83,10 @@ export const disable2FA = async () => {
 
 // Vehicles
 export const fetchVehicles = async (orderBy = 'permit_number') => {
-  const { vehicles } = await httpClient.get(`/vehicles?orderBy=${orderBy}`);
+  // Add timestamp to bypass browser cache after backend updates
+  const timestamp = Date.now();
+  const { vehicles } = await httpClient.get(`/vehicles?orderBy=${orderBy}&_t=${timestamp}`);
+  console.log(`[fetchVehicles] Received ${vehicles?.length || 0} vehicles from backend`);
   return vehicles;
 };
 export const createVehicle = async (payload) => {
