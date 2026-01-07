@@ -42,6 +42,14 @@ export default function VehicleDatabase() {
     refetchInterval: 60000,
   });
 
+  // Debug: Log vehicle count to verify backend is returning all vehicles
+  React.useEffect(() => {
+    if (vehicles.length > 0) {
+      console.log(`[VehicleDatabase] Total vehicles loaded: ${vehicles.length}`);
+      console.log(`[VehicleDatabase] Green: ${vehicles.filter(v => v.parking_type === "Green").length}, Yellow: ${vehicles.filter(v => v.parking_type === "Yellow").length}, Red: ${vehicles.filter(v => v.parking_type === "Red").length}`);
+    }
+  }, [vehicles]);
+
   const createVehicleMutation = useMutation({
     mutationFn: (vehicleData) => createVehicle(vehicleData),
     onSuccess: () => {
