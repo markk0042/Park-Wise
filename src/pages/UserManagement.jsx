@@ -334,6 +334,8 @@ export default function UserManagement() {
                     placeholder="Enter new password (min 6 characters)"
                     required
                     minLength={6}
+                    autoComplete="new-password"
+                    autoFocus
                   />
                 </div>
                 <div className="space-y-2">
@@ -346,6 +348,7 @@ export default function UserManagement() {
                     placeholder="Confirm new password"
                     required
                     minLength={6}
+                    autoComplete="new-password"
                   />
                 </div>
                 {resetPasswordError && (
