@@ -232,21 +232,11 @@ export const bulkReplaceVehicles = async (vehicles) => {
   // Then insert all new vehicles
   // Auto-assign parking types based on permit numbers
   const vehiclesWithAutoTypes = vehicles.map(vehicle => {
-    const permitNum = vehicle.permit_number ? parseInt(String(vehicle.permit_number).trim(), 10) : null;
     let parkingType = vehicle.parking_type;
     
     // If parking_type is not explicitly set or is empty, auto-assign based on permit
     if (!parkingType || !parkingType.trim()) {
-      if (!vehicle.permit_number || !vehicle.permit_number.trim()) {
-        // No permit = Red (unregistered)
-        parkingType = 'Red';
-      } else if (permitNum && !isNaN(permitNum)) {
-        // Has permit: 602+ = Yellow, <602 = Green
-        parkingType = permitNum >= 602 ? 'Yellow' : 'Green';
-      } else {
-        // Invalid permit number format = Red
-        parkingType = 'Red';
-      }
+      parkingType = getParkingTypeFromPermit(vehicle.permit_number);
     }
     
     return {
@@ -278,15 +268,32 @@ export const bulkReplaceVehicles = async (vehicles) => {
 };
 
 /**
+ * Helper function to check if a permit is a visitor permit
+ */
+const isVisitorPermit = (permitNumber) => {
+  if (!permitNumber) return false;
+  const permitStr = String(permitNumber).trim().toLowerCase();
+  return permitStr.includes('visitor') || permitStr.includes('visitor bage');
+};
+
+/**
  * Helper function to determine parking type from permit number
+ * Visitor permits -> Visitor
  * Permits >= 602 are Yellow, otherwise Green
+ * No permit -> Red
  */
 const getParkingTypeFromPermit = (permitNumber) => {
-  if (!permitNumber) return 'Green';
+  if (!permitNumber) return 'Red';
   const permitStr = String(permitNumber).trim();
-  if (!permitStr) return 'Green';
+  if (!permitStr) return 'Red';
+  
+  // Check for visitor permits first
+  if (isVisitorPermit(permitNumber)) {
+    return 'Visitor';
+  }
+  
   const permitNum = parseInt(permitStr, 10);
-  if (isNaN(permitNum)) return 'Green';
+  if (isNaN(permitNum)) return 'Red';
   return permitNum >= 602 ? 'Yellow' : 'Green';
 };
 

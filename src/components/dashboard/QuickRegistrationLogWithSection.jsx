@@ -222,7 +222,8 @@ export default function QuickRegistrationLogWithSection({ section }) {
   const parkingColors = {
     Green: "bg-emerald-100 text-emerald-800",
     Yellow: "bg-amber-100 text-amber-800",
-    Red: "bg-red-100 text-red-800"
+    Red: "bg-red-100 text-red-800",
+    Visitor: "bg-purple-100 text-purple-800"
   };
 
   const sectionColor = section === "Green" ? "emerald" : "amber";

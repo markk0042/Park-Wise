@@ -7,7 +7,7 @@ import {
 
 const parkingLogSchema = z.object({
   registration_plate: z.string().min(1),
-  parking_type: z.enum(['Green', 'Yellow', 'Red']).default('Green'),
+  parking_type: z.enum(['Green', 'Yellow', 'Red', 'Visitor']).default('Green'),
   notes: z.string().optional().default(''),
   log_date: z.string().optional(),
   log_time: z.string().optional()

@@ -31,13 +31,15 @@ export default function CategoryReport({ logs, category, onBack, currentUser }) 
     all: "bg-slate-100 text-slate-800 border-slate-300",
     Green: "bg-emerald-100 text-emerald-800 border-emerald-300",
     Yellow: "bg-amber-100 text-amber-800 border-amber-300",
-    Red: "bg-red-100 text-red-800 border-red-300"
+    Red: "bg-red-100 text-red-800 border-red-300",
+    Visitor: "bg-purple-100 text-purple-800 border-purple-300"
   };
 
   const parkingBadges = {
     Green: "bg-emerald-100 text-emerald-800 border-emerald-300",
     Yellow: "bg-amber-100 text-amber-800 border-amber-300",
-    Red: "bg-red-100 text-red-800 border-red-300"
+    Red: "bg-red-100 text-red-800 border-red-300",
+    Visitor: "bg-purple-100 text-purple-800 border-purple-300"
   };
 
   // Helper function to extract and parse permit number for sorting
@@ -251,6 +253,7 @@ export default function CategoryReport({ logs, category, onBack, currentUser }) 
                                 {log.parking_type === "Green" && "Green Car Park"}
                                 {log.parking_type === "Yellow" && "Yellow Car Park"}
                                 {log.parking_type === "Red" && "Unregistered"}
+                                {log.parking_type === "Visitor" && "Visitor Parking"}
                               </Badge>
                             </TableCell>
                           )}
@@ -279,6 +282,7 @@ export default function CategoryReport({ logs, category, onBack, currentUser }) 
                                 {log.parking_type === "Green" && "Green Car Park"}
                                 {log.parking_type === "Yellow" && "Yellow Car Park"}
                                 {log.parking_type === "Red" && "Unregistered"}
+                                {log.parking_type === "Visitor" && "Visitor Parking"}
                               </Badge>
                             </TableCell>
                           )}

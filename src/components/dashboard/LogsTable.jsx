@@ -31,7 +31,8 @@ export default function LogsTable({ logs, searchTerm, currentUser, showTitle = f
   const parkingBadges = {
     Green: "bg-emerald-100 text-emerald-800 border-emerald-300",
     Yellow: "bg-amber-100 text-amber-800 border-amber-300",
-    Red: "bg-red-100 text-red-800 border-red-300"
+    Red: "bg-red-100 text-red-800 border-red-300",
+    Visitor: "bg-purple-100 text-purple-800 border-purple-300"
   };
 
   const isAdmin = currentUser?.role === 'admin';
@@ -92,6 +93,7 @@ export default function LogsTable({ logs, searchTerm, currentUser, showTitle = f
                         {log.parking_type === "Green" && "Green"}
                         {log.parking_type === "Yellow" && "Yellow"}
                         {log.parking_type === "Red" && "Unregistered"}
+                        {log.parking_type === "Visitor" && "Visitor"}
                       </Badge>
                     </TableCell>
                     {isAdmin && (

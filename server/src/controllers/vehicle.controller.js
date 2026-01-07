@@ -14,7 +14,7 @@ import {
 const vehicleSchema = z.object({
   registration_plate: z.string().min(1),
   permit_number: z.string().optional().or(z.literal('')).transform((val) => val || null),
-  parking_type: z.enum(['Green', 'Yellow', 'Red']).default('Green'),
+  parking_type: z.enum(['Green', 'Yellow', 'Red', 'Visitor']).default('Green'),
   notes: z.string().optional().default(''),
   is_active: z.boolean().default(true)
 });

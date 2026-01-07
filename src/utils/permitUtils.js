@@ -30,6 +30,21 @@ export function getParkingTypeFromPermit(permitNumber, defaultType = "Green") {
 }
 
 /**
+ * Checks if a permit number indicates a visitor permit
+ * 
+ * @param {string} permitNumber - The permit number to check
+ * @returns {boolean} - True if the permit is a visitor permit
+ */
+export function isVisitorPermit(permitNumber) {
+  if (!permitNumber) {
+    return false;
+  }
+  
+  const permitStr = String(permitNumber).trim().toLowerCase();
+  return permitStr.includes('visitor') || permitStr.includes('visitor bage');
+}
+
+/**
  * Auto-assigns parking type based on permit number if not explicitly set
  * 
  * @param {object} vehicleData - Vehicle data object
@@ -39,6 +54,14 @@ export function autoAssignParkingType(vehicleData) {
   // If parking_type is already set and not empty, use it
   if (vehicleData.parking_type && vehicleData.parking_type.trim()) {
     return vehicleData;
+  }
+
+  // Check for visitor permits first
+  if (vehicleData.permit_number && isVisitorPermit(vehicleData.permit_number)) {
+    return {
+      ...vehicleData,
+      parking_type: "Visitor"
+    };
   }
 
   // If no permit number, it's Red (unregistered)

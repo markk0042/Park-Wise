@@ -49,7 +49,7 @@ export default function VehicleDatabase() {
   React.useEffect(() => {
     if (vehicles.length > 0) {
       console.log(`[VehicleDatabase] Total vehicles loaded: ${vehicles.length}`);
-      console.log(`[VehicleDatabase] Green: ${vehicles.filter(v => v.parking_type === "Green").length}, Yellow: ${vehicles.filter(v => v.parking_type === "Yellow").length}, Red: ${vehicles.filter(v => v.parking_type === "Red").length}`);
+      console.log(`[VehicleDatabase] Green: ${vehicles.filter(v => v.parking_type === "Green").length}, Yellow: ${vehicles.filter(v => v.parking_type === "Yellow").length}, Red: ${vehicles.filter(v => v.parking_type === "Red").length}, Visitor: ${vehicles.filter(v => v.parking_type === "Visitor").length}`);
     }
   }, [vehicles]);
 
@@ -213,7 +213,12 @@ export default function VehicleDatabase() {
     
     if (!matchesSearch) return false;
 
-    // Range filter
+    // Range filter - skip for Visitor and Red (unregistered) as they don't use permit ranges
+    if (selectedColor === "Visitor" || selectedColor === "Red") {
+      return true;
+    }
+
+    // Range filter for Green and Yellow permits
     if (vehicle.permit_number) {
       const permitNum = parseInt(vehicle.permit_number);
       if (!isNaN(permitNum)) {
@@ -302,7 +307,7 @@ export default function VehicleDatabase() {
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <div className="bg-emerald-50 p-3 md:p-4 rounded-lg border-2 border-emerald-200">
                 <p className="text-xs md:text-sm text-emerald-700 font-semibold mb-1">Green Permits</p>
                 <p className="text-xl md:text-3xl font-bold text-emerald-900">
@@ -319,6 +324,12 @@ export default function VehicleDatabase() {
                 <p className="text-xs md:text-sm text-red-700 font-semibold mb-1">Red (Unregistered)</p>
                 <p className="text-xl md:text-3xl font-bold text-red-900">
                   {vehicles.filter(v => v.parking_type === "Red").length}
+                </p>
+              </div>
+              <div className="bg-purple-50 p-3 md:p-4 rounded-lg border-2 border-purple-200">
+                <p className="text-xs md:text-sm text-purple-700 font-semibold mb-1">Visitor Parking</p>
+                <p className="text-xl md:text-3xl font-bold text-purple-900">
+                  {vehicles.filter(v => v.parking_type === "Visitor").length}
                 </p>
               </div>
             </div>
@@ -405,6 +416,18 @@ export default function VehicleDatabase() {
                             <div className="flex items-center gap-2">
                               <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-amber-500 border-2 border-amber-700" />
                               <span className="font-semibold">Yellow Permit</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="Red">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-red-500 border-2 border-red-700" />
+                              <span className="font-semibold">Red (Unregistered)</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="Visitor">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-purple-500 border-2 border-purple-700" />
+                              <span className="font-semibold">Visitor Parking</span>
                             </div>
                           </SelectItem>
                         </SelectContent>
@@ -650,27 +673,40 @@ export default function VehicleDatabase() {
                 <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-red-700" />
                 Red / Unregistered
               </Button>
+              <Button
+                variant={selectedColor === "Visitor" ? "default" : "outline"}
+                onClick={() => {
+                  setSelectedColor("Visitor");
+                  setSelectedRange("00001-00100"); // Visitor doesn't use permit ranges, but keep a default
+                }}
+                className={`flex items-center gap-2 ${selectedColor === "Visitor" ? "bg-purple-600 hover:bg-purple-700" : ""}`}
+              >
+                <div className="w-3 h-3 rounded-full bg-purple-500 border-2 border-purple-700" />
+                Visitor Parking
+              </Button>
             </div>
 
-            {/* Range Buttons */}
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-2">
-              <span className="text-sm font-semibold text-slate-700 flex items-center">
-                Permit Range:
-              </span>
-              <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                {ranges.map((range) => (
-                  <Button
-                    key={range}
-                    size="sm"
-                    variant={selectedRange === range ? "default" : "outline"}
-                    onClick={() => setSelectedRange(range)}
-                    className={selectedRange === range ? "bg-slate-900 hover:bg-slate-800" : ""}
-                  >
-                    {range}
-                  </Button>
-                ))}
+            {/* Range Buttons - Only show for Green and Yellow permits */}
+            {(selectedColor === "Green" || selectedColor === "Yellow") && (
+              <div className="flex flex-col md:flex-row items-center md:items-start gap-2">
+                <span className="text-sm font-semibold text-slate-700 flex items-center">
+                  Permit Range:
+                </span>
+                <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                  {ranges.map((range) => (
+                    <Button
+                      key={range}
+                      size="sm"
+                      variant={selectedRange === range ? "default" : "outline"}
+                      onClick={() => setSelectedRange(range)}
+                      className={selectedRange === range ? "bg-slate-900 hover:bg-slate-800" : ""}
+                    >
+                      {range}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
