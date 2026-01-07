@@ -260,7 +260,7 @@ export default function VehicleDatabase() {
             </Button>
             <Button
               onClick={() => {
-                if (window.confirm("This will update all vehicles' parking types based on their permit numbers.\n\nPermits >= 00602 will be set to Yellow.\nPermits < 00602 will be set to Green.\n\nContinue?")) {
+                if (window.confirm("This will update all vehicles' parking types based on their permit numbers.\n\n• Visitor permits (VISITOR, PERIODIC VISITOR, etc.) → Visitor\n• Permits >= 00602 → Yellow\n• Permits < 00602 → Green\n• No permit → Red (Unregistered)\n\nContinue?")) {
                   updateParkingTypesMutation.mutate();
                 }
               }}

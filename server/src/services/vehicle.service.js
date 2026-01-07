@@ -170,17 +170,25 @@ export const bulkUpsertVehicles = async (vehicles) => {
       const regPlate = vehicle.registration_plate?.toUpperCase().trim();
       if (!regPlate) continue;
 
+      // Always re-assign parking type based on permit number to ensure correctness
+      // This fixes cases where vehicles were uploaded with incorrect parking types
+      const correctParkingType = getParkingTypeFromPermit(vehicle.permit_number);
+      const vehicleWithCorrectType = {
+        ...vehicle,
+        parking_type: correctParkingType
+      };
+
       const existingId = existingMap.get(regPlate);
       if (existingId) {
         // Vehicle exists, prepare for update
         toUpdate.push({
           id: existingId,
-          ...vehicle,
+          ...vehicleWithCorrectType,
           updated_at: new Date().toISOString()
         });
       } else {
         // New vehicle, prepare for insert
-        toInsert.push(vehicle);
+        toInsert.push(vehicleWithCorrectType);
       }
     }
 
@@ -231,13 +239,11 @@ export const bulkReplaceVehicles = async (vehicles) => {
 
   // Then insert all new vehicles
   // Auto-assign parking types based on permit numbers
+  // Always check for visitor permits first, then use getParkingTypeFromPermit
   const vehiclesWithAutoTypes = vehicles.map(vehicle => {
-    let parkingType = vehicle.parking_type;
-    
-    // If parking_type is not explicitly set or is empty, auto-assign based on permit
-    if (!parkingType || !parkingType.trim()) {
-      parkingType = getParkingTypeFromPermit(vehicle.permit_number);
-    }
+    // Always re-assign parking type based on permit number to ensure correctness
+    // This ensures visitor permits are correctly identified even if they were previously set incorrectly
+    const parkingType = getParkingTypeFromPermit(vehicle.permit_number);
     
     return {
       ...vehicle,
@@ -269,10 +275,13 @@ export const bulkReplaceVehicles = async (vehicles) => {
 
 /**
  * Helper function to check if a permit is a visitor permit
+ * Handles variations: "VISITOR", "PERIODIC VISITOR", "PERIDIOC VISITOR" (typo), "VISITOR BAGE", etc.
  */
 const isVisitorPermit = (permitNumber) => {
   if (!permitNumber) return false;
   const permitStr = String(permitNumber).trim().toLowerCase();
+  // Check for visitor-related keywords (case-insensitive)
+  // Handles: "visitor", "periodic visitor", "peridioc visitor" (typo), "visitor bage", etc.
   return permitStr.includes('visitor') || permitStr.includes('visitor bage');
 };
 

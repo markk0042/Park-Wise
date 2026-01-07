@@ -31,6 +31,7 @@ export function getParkingTypeFromPermit(permitNumber, defaultType = "Green") {
 
 /**
  * Checks if a permit number indicates a visitor permit
+ * Handles variations: "VISITOR", "PERIODIC VISITOR", "PERIDIOC VISITOR" (typo), "VISITOR BAGE", etc.
  * 
  * @param {string} permitNumber - The permit number to check
  * @returns {boolean} - True if the permit is a visitor permit
@@ -41,27 +42,31 @@ export function isVisitorPermit(permitNumber) {
   }
   
   const permitStr = String(permitNumber).trim().toLowerCase();
+  // Check for visitor-related keywords (case-insensitive)
+  // Handles: "visitor", "periodic visitor", "peridioc visitor" (typo), "visitor bage", etc.
   return permitStr.includes('visitor') || permitStr.includes('visitor bage');
 }
 
 /**
  * Auto-assigns parking type based on permit number if not explicitly set
+ * Always checks for visitor permits first, even if parking_type is already set
  * 
  * @param {object} vehicleData - Vehicle data object
  * @returns {object} - Vehicle data with parking_type set if needed
  */
 export function autoAssignParkingType(vehicleData) {
-  // If parking_type is already set and not empty, use it
-  if (vehicleData.parking_type && vehicleData.parking_type.trim()) {
-    return vehicleData;
-  }
-
-  // Check for visitor permits first
+  // ALWAYS check for visitor permits first, regardless of existing parking_type
+  // This ensures visitor permits are correctly identified even if they were previously set to Green/Yellow
   if (vehicleData.permit_number && isVisitorPermit(vehicleData.permit_number)) {
     return {
       ...vehicleData,
       parking_type: "Visitor"
     };
+  }
+
+  // If parking_type is already set and not empty, and it's not a visitor permit, use it
+  if (vehicleData.parking_type && vehicleData.parking_type.trim()) {
+    return vehicleData;
   }
 
   // If no permit number, it's Red (unregistered)
